@@ -80,6 +80,32 @@ libraries with `{{include "alias/key"}}`. Thus a change to one fragment
 changes each agent that uses it. The change makes a new revision, so do it
 between demos.
 
+## MCP tools (deliberately useless)
+
+Three small MCP servers give the agents tools to call, so each trace in
+Tracing shows a full tree:
+*Agent → LLM → Tool → Tool → LLM*, with each `execute_tool` span and the
+token count of the turn.
+
+| Server | Tools | Bound to |
+| --- | --- | --- |
+| `oracle` 🔮 | `ask_the_oracle` (a Magic 8-Ball for ops), `roll_dice` | chaos-probe, release-notary, drift-sentinel, hello-substrate |
+| `coffee` ☕ | `brew`, `bean_level` (on-call morale index) | sre-oncall, cost-warden, doc-curator, hello-substrate |
+| `excuses` 🙃 | `generate_excuse`, `blame_dns` (it is always DNS) | sre-oncall, incident-scribe, patch-smith |
+
+The three servers are one file, [`mcp/server.mjs`](mcp/server.mjs). The
+file uses the Streamable HTTP transport with JSON responses and has no
+dependencies. It runs on the stock `node:22-alpine` image from a ConfigMap,
+so there is no image to build. `deploy/mcp.yaml` registers each server as a
+`RemoteMCPServer` (the kagent UI's MCP Servers page shows 3 servers and 6
+tools). Each AgentTemplate binds its servers under `spec.tools`. The server
+reference must not have `apiGroup` (`kind: RemoteMCPServer`, `name` only).
+
+Validated: an agent in its gVisor sandbox calls the in-cluster servers through
+the Substrate network (the server logs show each call and its arguments). To
+make traffic with tool calls, use prompts that start with "Use your tools:".
+`stimulate.mjs` sends some of these prompts.
+
 ## Two worker pools
 
 The fleet runs on two WorkerPools, which isolates one group of agents from
@@ -237,16 +263,17 @@ worker pod), but you see the recovery on stage.
   actor stays `Resuming` for 90s (`RESUME_STUCK_MS`), and **RESET POOL** now
   restarts the worker Deployments. The affected sessions go to `Crashed`, and
   Scope stops using them.
-- **Tracing is partial.** The Tracing page lists each turn (agent, platform,
-  cluster, duration), and each trace has `POST` and `invoke_agent` spans.
-  Claude's `call_llm` spans do not arrive, so Model and Tokens stay empty. The
-  data is present: with `otel.logging.enabled` (in `deploy/values.yaml`, not in
-  #191), `claude_code.api_request` logs arrive in ClickHouse with the model,
-  the input and output tokens, and the cost, and with the TraceId and SpanId
-  of the turn. But the Tracing UI shows only spans. `call_llm` spans arrived on
-  2026-09-23 and then stopped. A delayed flush at suspend is not the cause
-  (tested). #191 says that its §11 and §13 (tracing) are "not verified in this
-  revision". Take this issue to the kagent-enterprise team.
+- **Claude's `call_llm` spans can stop.** If they stop, Tracing shows each
+  turn with "—" for Model and Tokens, and a trace has only `POST` and
+  `invoke_agent`. On this rig the spans stopped for about 18 hours. They
+  started again after these changes: `otel.logging.enabled` (in
+  `deploy/values.yaml`, not in #191) and new golden snapshots when the MCP
+  tools were bound. We did not find the exact cause. A delayed flush at
+  suspend is not the cause (tested). `preflight.sh` now checks that the last
+  turn has `call_llm` spans. #191 says that its tracing sections are "not
+  verified in this revision". With logging on, Claude's
+  `claude_code.api_request` logs (model, tokens, cost, TraceId) arrive in
+  ClickHouse also when the spans do not.
 - **The controller's own version reports `dev`.** Scope reads the chart label
   instead.
 - **The Substrate chart does not configure OTLP for all components.**

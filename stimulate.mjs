@@ -30,6 +30,11 @@ const QUICK_PROMPTS = [
   'What would you check first during an incident? One sentence.',
   'Reply with a haiku about Kubernetes.',
   'One sentence: why do snapshots beat idle pods?',
+  // tool turns: the MCP servers (mcp/server.mjs) give traces execute_tool spans
+  'Use your tools: is this outage DNS? Answer in one sentence.',
+  'Use your tools: ask the oracle whether we should deploy on Friday.',
+  'Use your tools: brew an incident-size coffee and check the bean level.',
+  'Use your tools: roll 2d20 to pick the next chaos target, then generate an excuse for it.',
 ];
 // Long generations hold an actor on its worker for 10–20s — that's what makes
 // several bays glow at once instead of a single 2s flash.

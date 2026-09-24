@@ -1,0 +1,168 @@
+# Three deliberately useless MCP servers (mcp/server.mjs), so agents have tools
+# to call and traces have tool calls to show. Stock node:22-alpine runs the
+# code from ConfigMap scope-mcp-src, which install.sh creates from the file:
+#   kubectl create configmap scope-mcp-src -n kagent --from-file=../mcp/server.mjs
+# Each server is registered as a RemoteMCPServer (the kagent UI's MCP Servers
+# page); deploy/fleet.yaml binds them to agents under spec.tools.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scope-mcp-oracle
+  namespace: kagent
+  labels: {app: scope-mcp-oracle, demo: substrate-scope}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: scope-mcp-oracle}}
+  template:
+    metadata:
+      labels: {app: scope-mcp-oracle, demo: substrate-scope}
+      annotations:
+        scope.demo/src: server.mjs   # bump to roll the pods after editing the ConfigMap
+    spec:
+      containers:
+        - name: mcp
+          image: node:22-alpine
+          command: [node, /app/server.mjs]
+          env:
+            - {name: MCP_PERSONA, value: oracle}
+            - {name: PORT, value: "8080"}
+          ports: [{containerPort: 8080, name: http}]
+          readinessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 5}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 96Mi}
+          volumeMounts: [{name: src, mountPath: /app}]
+      volumes:
+        - name: src
+          configMap: {name: scope-mcp-src}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scope-mcp-oracle
+  namespace: kagent
+  labels: {demo: substrate-scope}
+spec:
+  selector: {app: scope-mcp-oracle}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: kagent.dev/v1alpha3
+kind: RemoteMCPServer
+metadata:
+  name: oracle
+  namespace: kagent
+  labels: {demo: substrate-scope}
+spec:
+  description: "🔮 The SRE Oracle: a Magic 8-Ball for operations questions, and dice for picking chaos targets."
+  protocol: STREAMABLE_HTTP
+  url: http://scope-mcp-oracle.kagent.svc.cluster.local:8080/mcp
+  timeout: 15s
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scope-mcp-coffee
+  namespace: kagent
+  labels: {app: scope-mcp-coffee, demo: substrate-scope}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: scope-mcp-coffee}}
+  template:
+    metadata:
+      labels: {app: scope-mcp-coffee, demo: substrate-scope}
+      annotations:
+        scope.demo/src: server.mjs   # bump to roll the pods after editing the ConfigMap
+    spec:
+      containers:
+        - name: mcp
+          image: node:22-alpine
+          command: [node, /app/server.mjs]
+          env:
+            - {name: MCP_PERSONA, value: coffee}
+            - {name: PORT, value: "8080"}
+          ports: [{containerPort: 8080, name: http}]
+          readinessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 5}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 96Mi}
+          volumeMounts: [{name: src, mountPath: /app}]
+      volumes:
+        - name: src
+          configMap: {name: scope-mcp-src}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scope-mcp-coffee
+  namespace: kagent
+  labels: {demo: substrate-scope}
+spec:
+  selector: {app: scope-mcp-coffee}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: kagent.dev/v1alpha3
+kind: RemoteMCPServer
+metadata:
+  name: coffee
+  namespace: kagent
+  labels: {demo: substrate-scope}
+spec:
+  description: "☕ Break-room coffee machine: brew for the on-call engineer and check the bean level (morale index)."
+  protocol: STREAMABLE_HTTP
+  url: http://scope-mcp-coffee.kagent.svc.cluster.local:8080/mcp
+  timeout: 15s
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scope-mcp-excuses
+  namespace: kagent
+  labels: {app: scope-mcp-excuses, demo: substrate-scope}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: scope-mcp-excuses}}
+  template:
+    metadata:
+      labels: {app: scope-mcp-excuses, demo: substrate-scope}
+      annotations:
+        scope.demo/src: server.mjs   # bump to roll the pods after editing the ConfigMap
+    spec:
+      containers:
+        - name: mcp
+          image: node:22-alpine
+          command: [node, /app/server.mjs]
+          env:
+            - {name: MCP_PERSONA, value: excuses}
+            - {name: PORT, value: "8080"}
+          ports: [{containerPort: 8080, name: http}]
+          readinessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 5}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 96Mi}
+          volumeMounts: [{name: src, mountPath: /app}]
+      volumes:
+        - name: src
+          configMap: {name: scope-mcp-src}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scope-mcp-excuses
+  namespace: kagent
+  labels: {demo: substrate-scope}
+spec:
+  selector: {app: scope-mcp-excuses}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: kagent.dev/v1alpha3
+kind: RemoteMCPServer
+metadata:
+  name: excuses
+  namespace: kagent
+  labels: {demo: substrate-scope}
+spec:
+  description: "🙃 Incident excuse generator: unfalsifiable excuses for any system, and a DNS blame check (it is always DNS)."
+  protocol: STREAMABLE_HTTP
+  url: http://scope-mcp-excuses.kagent.svc.cluster.local:8080/mcp
+  timeout: 15s

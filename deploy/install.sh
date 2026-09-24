@@ -95,8 +95,18 @@ helm upgrade --install --kube-context "$C" kagent \
   oci://us-docker.pkg.dev/solo-public/kagent-enterprise-helm/charts/kagent-enterprise \
   --version 1.0.0-alpha3 --namespace kagent -f values.yaml "${LIC[@]}" --wait --timeout 15m
 
+# The useless MCP servers the agents bind to (mcp/server.mjs on node:22-alpine)
+K create configmap scope-mcp-src -n kagent --from-file=../mcp/server.mjs --dry-run=client -o yaml | K apply -f - >/dev/null
+K apply -f mcp.yaml >/dev/null
+for s in oracle coffee excuses; do K rollout status deploy/scope-mcp-$s -n kagent --timeout=180s >/dev/null; done
+for _ in $(seq 1 30); do   # kagent discovers each server's tools (first try can race the pod)
+  n=$(K get remotemcpservers.kagent.dev -n kagent -l demo=substrate-scope -o json \
+    | jq '[.items[] | select(any(.status.conditions[]?; .type=="Accepted" and .status=="True"))] | length')
+  [ "$n" = 3 ] && break; sleep 5
+done
+
 # §10 two WorkerPools, two Harnesses, the fleet; then wait for 9 golden snapshots
-K apply -f prompts.yaml -f fleet.yaml >/dev/null   # prompt libraries before the agents that include them
+K apply -f prompts.yaml -f fleet.yaml >/dev/null   # prompt libraries and tools before the agents that use them
 echo "waiting for golden snapshots..."
 for _ in $(seq 1 60); do
   ready=$(K get agenttemplate -n kagent -l demo=substrate-scope -o json \

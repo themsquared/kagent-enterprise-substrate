@@ -49,6 +49,9 @@ data:
   brevity: |
     Keep answers to one or two sentences unless the user asks for more detail
     or a document.
+  tools: |
+    You have a few tools. When a tool fits the request, call it and use its
+    result in your answer. Say which tool you used.
   identity: |
     You run on kagent-enterprise as a Claude Code agent inside a gVisor actor on
     Agent Substrate: suspended to a snapshot between turns, restored on demand.

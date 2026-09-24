@@ -11,7 +11,9 @@
 # Instructions are composed from prompt libraries (deploy/prompts.yaml plus
 # the chart's kagent-builtin-prompts) with {{include "alias/key"}}.
 #
-# Needs: deploy/prompts.yaml applied first, and Secret kagent-anthropic (key ANTHROPIC_API_KEY) in ns kagent.
+# Tools: the useless MCP servers in deploy/mcp.yaml, bound under spec.tools.
+#
+# Needs: deploy/prompts.yaml and deploy/mcp.yaml applied first, and Secret kagent-anthropic (key ANTHROPIC_API_KEY) in ns kagent.
 apiVersion: kagent.dev/v1alpha3
 kind: ModelConfig
 metadata:
@@ -107,6 +109,8 @@ spec:
 
     {{include "style/identity"}}
 
+    {{include "style/tools"}}
+
     {{include "kagent-builtin-prompts/safety-guardrails"}}
   promptTemplate:
     dataSources:
@@ -115,6 +119,15 @@ spec:
     - name: sre-playbooks
       alias: sre
     - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: oracle
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: coffee
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -138,6 +151,8 @@ spec:
 
     {{include "style/identity"}}
 
+    {{include "style/tools"}}
+
     {{include "sre/incident-timeline"}}
 
     {{include "kagent-builtin-prompts/safety-guardrails"}}
@@ -148,6 +163,11 @@ spec:
     - name: sre-playbooks
       alias: sre
     - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: excuses
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -171,6 +191,8 @@ spec:
 
     {{include "style/identity"}}
 
+    {{include "style/tools"}}
+
     {{include "sre/release-notes"}}
 
     {{include "kagent-builtin-prompts/safety-guardrails"}}
@@ -181,6 +203,11 @@ spec:
     - name: sre-playbooks
       alias: sre
     - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: oracle
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -204,6 +231,8 @@ spec:
 
     {{include "style/identity"}}
 
+    {{include "style/tools"}}
+
     {{include "sre/cost-guardrails"}}
 
     {{include "kagent-builtin-prompts/safety-guardrails"}}
@@ -214,6 +243,11 @@ spec:
     - name: sre-playbooks
       alias: sre
     - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: coffee
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -237,6 +271,8 @@ spec:
 
     {{include "style/identity"}}
 
+    {{include "style/tools"}}
+
     {{include "sre/change-safety"}}
 
     {{include "kagent-builtin-prompts/safety-guardrails"}}
@@ -247,6 +283,11 @@ spec:
     - name: sre-playbooks
       alias: sre
     - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: oracle
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -270,6 +311,8 @@ spec:
 
     {{include "style/identity"}}
 
+    {{include "style/tools"}}
+
     {{include "sre/change-safety"}}
 
     {{include "kagent-builtin-prompts/safety-guardrails"}}
@@ -280,6 +323,11 @@ spec:
     - name: sre-playbooks
       alias: sre
     - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: oracle
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -303,6 +351,8 @@ spec:
 
     {{include "style/identity"}}
 
+    {{include "style/tools"}}
+
     {{include "sre/severity-rubric"}}
 
     {{include "sre/change-safety"}}
@@ -315,6 +365,15 @@ spec:
     - name: sre-playbooks
       alias: sre
     - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: excuses
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: coffee
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -338,6 +397,8 @@ spec:
 
     {{include "style/identity"}}
 
+    {{include "style/tools"}}
+
     {{include "sre/release-notes"}}
 
     {{include "kagent-builtin-prompts/safety-guardrails"}}
@@ -348,6 +409,11 @@ spec:
     - name: sre-playbooks
       alias: sre
     - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: coffee
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -371,6 +437,8 @@ spec:
 
     {{include "style/identity"}}
 
+    {{include "style/tools"}}
+
     {{include "sre/change-safety"}}
 
     {{include "kagent-builtin-prompts/safety-guardrails"}}
@@ -381,3 +449,8 @@ spec:
     - name: sre-playbooks
       alias: sre
     - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: excuses

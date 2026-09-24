@@ -59,5 +59,13 @@ r=$(curl -s -m 120 -X POST "$SCOPE/converse" -d '{"agent":"hello-substrate","tex
 [ "$(jq -r .ok <<<"$r")" = true ] && ok "hello-substrate answered in $(jq -r .ms <<<"$r")ms" \
   || bad "turn failed: $(jq -r .text <<<"$r" | cut -c1-120)"
 
+echo "Tracing (the Tracing page needs Claude's call_llm spans, which have broken silently before)"
+sleep 12   # the collector batches
+CH=$(K get pods -n kagent -o name | grep clickhouse | head -1)
+llm=$(K exec -n kagent "$CH" -- clickhouse-client -q "SELECT count() FROM kagent.otel_traces_json WHERE SpanName='call_llm'
+  AND TraceId = (SELECT TraceId FROM kagent.otel_traces_json WHERE SpanName LIKE 'invoke_agent hello-substrate%' ORDER BY Timestamp DESC LIMIT 1)" 2>/dev/null)
+[ "${llm:-0}" -gt 0 ] && ok "last turn has $llm call_llm span(s): Model and Tokens will show" \
+  || bad "last turn has no call_llm spans: the Tracing page will show '—' for Model and Tokens"
+
 echo; [ "$fail" = 0 ] && echo "PREFLIGHT OK" || echo "PREFLIGHT FAILED (re-run with --fix, or rebuild with ./deploy/install.sh)"
 exit $fail

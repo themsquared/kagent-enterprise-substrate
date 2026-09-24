@@ -97,6 +97,11 @@ const SCENARIOS = [
       ['say', 'On Agent Substrate, 4 workers serve those 40 agents, and each worker reserves the same 300Mi and 350m. What do the 4 workers reserve, and what is the saving against the 40 always-on pods?'],
       ['ckpt', 'savings estimate'],
     ] },
+  { agent: 'chaos-probe', name: 'Chaos day · pick a target', steps: [
+      ['say', 'Use your tools: roll 1d20 to pick which of our 20 services gets the next chaos experiment.'],
+      ['say', 'Use your tools: ask the oracle whether it is safe to run that experiment on a Friday.'],
+      ['ckpt', 'target chosen'],
+    ] },
   { agent: 'release-notary', name: 'Release notes · 4.13', steps: [
       ['say', 'Changes in 4.13: fix the checkout retry storm, add an EU region failover flag, upgrade to Go 1.27. Reply with the release notes (do not write a file).'],
       ['ckpt', 'draft notes'],
