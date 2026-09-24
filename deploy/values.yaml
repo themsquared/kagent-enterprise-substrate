@@ -1,0 +1,55 @@
+# kagent-enterprise 1.0.0-alpha3 values for the Substrate Scope demo.
+# Follows solo-io/enterprise-kagent discussion #191 §7, with two deltas:
+#   - Anthropic is the default provider (no OpenAI key needed; Codex is not in
+#     this demo). default-model-config -> Secret kagent-anthropic.
+#   - The worker pool starts at 2 (Scope's autoscaler floor), so templates
+#     reach golden-snapshot Ready in parallel.
+# The license key is NOT in this file: install.sh passes it from $SOLO_LICENSE_KEY.
+global:
+  cluster: kagent-ent
+  licensing:
+    createSecret: true
+
+telemetry:
+  enabled: true
+  traces:
+    enabled: true
+
+otel:
+  tracing:
+    enabled: true
+    exporter:
+      otlp:
+        # http:// is load-bearing: without it the exporter tries TLS (guide §7)
+        endpoint: http://solo-enterprise-telemetry-collector.kagent.svc.cluster.local:4317
+        insecure: true
+  # Not in discussion #191. Claude's per-call data (model, tokens: the call_llm
+  # spans and the Model/Tokens columns in Tracing) travels as OTel LOGS. With
+  # only tracing on, a trace is just POST -> invoke_agent, "tokens unknown".
+  logging:
+    enabled: true
+    exporter:
+      otlp:
+        endpoint: http://solo-enterprise-telemetry-collector.kagent.svc.cluster.local:4317
+        insecure: true
+
+controller:
+  substrate:
+    enabled: true
+    ateApiEndpoint: "dns:///api.ate-system.svc:443"
+    atenetRouterURL: "http://atenet-router.ate-system.svc:80"
+    defaultWorkerPool:
+      name: kagent-default
+
+substrate:
+  enabled: false   # Substrate is its own release in ate-system (guide §2.2)
+
+substrateWorkerPool:
+  create: true
+  name: kagent-default
+  replicas: 2
+  workerImage: ghcr.io/kagent-dev/substrate/ateom-gvisor:v0.2.0-beta5
+  sandboxClass: gvisor
+
+providers:
+  default: anthropic

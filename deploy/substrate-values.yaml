@@ -1,0 +1,10 @@
+credentialProvider:
+  namespacePolicies:
+    - atespace: kagent
+      allowedNamespaces: [kagent]
+# Not in discussion #191: without an endpoint every Substrate component exports
+# OTLP to localhost:4317 (connection refused), and the kagent-enterprise
+# dashboard's Substrate panels (pool occupancy, capacity, cold-start,
+# activation, per-instance requests) stay empty. http:// is load-bearing.
+otel:
+  endpoint: http://solo-enterprise-telemetry-collector.kagent.svc.cluster.local:4317

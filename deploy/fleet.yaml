@@ -1,0 +1,245 @@
+# Enterprise fleet: the 9 OSS SandboxAgents re-expressed for kagent-enterprise
+# 1.0.0-alpha3. Enterprise has no SandboxAgent kind; an agent is an AgentTemplate
+# admitted by a Harness. All 9 run on the Claude Code harness (the validated
+# runtime in this release) against claude-haiku-4-5, same model as the OSS rig.
+#
+# Two worker pools, for isolation: the incident agents (label
+# scope.demo/pool=oncall) run on kagent-oncall through Harness claude-oncall;
+# everything else runs on kagent-default through Harness claude. The two
+# selectors are disjoint, so each agent has exactly one Harness.
+#
+# Needs: Secret kagent-anthropic (key ANTHROPIC_API_KEY) in ns kagent.
+apiVersion: kagent.dev/v1alpha3
+kind: ModelConfig
+metadata:
+  name: claude-model-config
+  namespace: kagent
+spec:
+  provider: Anthropic
+  model: claude-haiku-4-5
+  apiKeySecret: kagent-anthropic
+  apiKeySecretKey: ANTHROPIC_API_KEY
+---
+apiVersion: kagent.dev/v1alpha3
+kind: Harness
+metadata:
+  name: claude
+  namespace: kagent
+  annotations:
+    scope.demo/image-tag: claude-harness:1.0.0-alpha2   # the image below is pinned by digest
+spec:
+  claude: {}
+  env:
+  - name: OTEL_RESOURCE_ATTRIBUTES
+    value: kagent.harness.kind=claude
+  workload:
+    image: ghcr.io/kagent-dev/kagent/claude-harness@sha256:6794f2d25be053766030dcd15aa0da58747a425bcf423e851ad0b6870d79d1b5
+  substrate:
+    workerPoolRef:
+      name: kagent-default
+    snapshotPolicy:
+      location: gs://ate-snapshots/kagent/
+  allowedAgentTemplates:
+    selector:
+      matchLabels:
+        kagent.dev/runtime: claude
+        scope.demo/pool: general
+---
+apiVersion: ate.dev/v1alpha1
+kind: WorkerPool
+metadata:
+  name: kagent-oncall
+  namespace: kagent
+  labels:
+    kagent.dev/worker-pool: kagent-oncall
+spec:
+  replicas: 2
+  sandboxClass: gvisor
+  workerImage: ghcr.io/kagent-dev/substrate/ateom-gvisor:v0.2.0-beta5
+---
+apiVersion: kagent.dev/v1alpha3
+kind: Harness
+metadata:
+  name: claude-oncall
+  namespace: kagent
+  annotations:
+    scope.demo/image-tag: claude-harness:1.0.0-alpha2   # the image below is pinned by digest
+spec:
+  allowedAgentTemplates:
+    selector:
+      matchLabels:
+        kagent.dev/runtime: claude
+        scope.demo/pool: oncall
+  claude: {}
+  env:
+  - name: OTEL_RESOURCE_ATTRIBUTES
+    value: kagent.harness.kind=claude
+  substrate:
+    snapshotPolicy:
+      location: gs://ate-snapshots/kagent/
+    workerPoolRef:
+      name: kagent-oncall
+  workload:
+    image: ghcr.io/kagent-dev/kagent/claude-harness@sha256:6794f2d25be053766030dcd15aa0da58747a425bcf423e851ad0b6870d79d1b5
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: hello-substrate
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: general
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: A friendly greeter running as a substrate actor
+  systemPrompt: 'You are a friendly greeter. When asked who you are, say you are hello-substrate,
+    a Claude Code agent inside a gVisor actor. Keep answers to one or two sentences.
+
+    '
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: incident-scribe
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: oncall
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: An incident scribe running as a substrate actor
+  systemPrompt: 'You are an incident scribe. You summarize outages into crisp timelines.
+    Keep answers to one or two sentences.
+
+    '
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: release-notary
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: general
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: A release notary running as a substrate actor
+  systemPrompt: 'You are a release notary. You draft changelogs and confirm rollout
+    status. Keep answers to one or two sentences.
+
+    '
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: cost-warden
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: general
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: A cost warden running as a substrate actor
+  systemPrompt: 'You are a cost warden. You flag wasteful workloads and idle capacity.
+    Keep answers to one or two sentences.
+
+    '
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: drift-sentinel
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: general
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: A drift sentinel running as a substrate actor
+  systemPrompt: 'You are a drift sentinel. You spot config drift between clusters.
+    Keep answers to one or two sentences.
+
+    '
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: chaos-probe
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: oncall
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: A chaos probe running as a substrate actor
+  systemPrompt: 'You are a chaos probe. You propose safe failure experiments. Keep
+    answers to one or two sentences.
+
+    '
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: sre-oncall
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: oncall
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: An sre on-call assistant running as a substrate actor
+  systemPrompt: 'You are an SRE on-call assistant. You triage alerts calmly. Keep
+    answers to one or two sentences.
+
+    '
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: doc-curator
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: general
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: A docs curator running as a substrate actor
+  systemPrompt: 'You are a docs curator. You keep runbooks accurate and short. Keep
+    answers to one or two sentences.
+
+    '
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: patch-smith
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: general
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: A patch smith running as a substrate actor
+  systemPrompt: 'You are a patch smith. You draft minimal, safe remediation patches.
+    Keep answers to one or two sentences.
+
+    '

@@ -1,0 +1,9 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: kagent-ent
+runtimeConfig:
+  "api/alpha": "false"
+  "certificates.k8s.io/v1beta1": "true"
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.37.0
