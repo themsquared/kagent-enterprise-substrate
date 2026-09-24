@@ -8,7 +8,10 @@
 # everything else runs on kagent-default through Harness claude. The two
 # selectors are disjoint, so each agent has exactly one Harness.
 #
-# Needs: Secret kagent-anthropic (key ANTHROPIC_API_KEY) in ns kagent.
+# Instructions are composed from prompt libraries (deploy/prompts.yaml plus
+# the chart's kagent-builtin-prompts) with {{include "alias/key"}}.
+#
+# Needs: deploy/prompts.yaml applied first, and Secret kagent-anthropic (key ANTHROPIC_API_KEY) in ns kagent.
 apiVersion: kagent.dev/v1alpha3
 kind: ModelConfig
 metadata:
@@ -26,7 +29,7 @@ metadata:
   name: claude
   namespace: kagent
   annotations:
-    scope.demo/image-tag: claude-harness:1.0.0-alpha2   # the image below is pinned by digest
+    scope.demo/image-tag: claude-harness:1.0.0-alpha2
 spec:
   claude: {}
   env:
@@ -63,7 +66,7 @@ metadata:
   name: claude-oncall
   namespace: kagent
   annotations:
-    scope.demo/image-tag: claude-harness:1.0.0-alpha2   # the image below is pinned by digest
+    scope.demo/image-tag: claude-harness:1.0.0-alpha2
 spec:
   allowedAgentTemplates:
     selector:
@@ -95,10 +98,23 @@ spec:
   modelConfig:
     name: claude-model-config
   description: A friendly greeter running as a substrate actor
-  systemPrompt: 'You are a friendly greeter. When asked who you are, say you are hello-substrate,
-    a Claude Code agent inside a gVisor actor. Keep answers to one or two sentences.
+  systemPrompt: |
+    You are a friendly greeter. When asked who you are, say you are hello-substrate, a Claude Code agent inside a gVisor actor.
 
-    '
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -113,10 +129,25 @@ spec:
   modelConfig:
     name: claude-model-config
   description: An incident scribe running as a substrate actor
-  systemPrompt: 'You are an incident scribe. You summarize outages into crisp timelines.
-    Keep answers to one or two sentences.
+  systemPrompt: |
+    You are an incident scribe. You summarize outages into crisp timelines.
 
-    '
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "sre/incident-timeline"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -131,10 +162,25 @@ spec:
   modelConfig:
     name: claude-model-config
   description: A release notary running as a substrate actor
-  systemPrompt: 'You are a release notary. You draft changelogs and confirm rollout
-    status. Keep answers to one or two sentences.
+  systemPrompt: |
+    You are a release notary. You draft changelogs and confirm rollout status.
 
-    '
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "sre/release-notes"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -149,10 +195,25 @@ spec:
   modelConfig:
     name: claude-model-config
   description: A cost warden running as a substrate actor
-  systemPrompt: 'You are a cost warden. You flag wasteful workloads and idle capacity.
-    Keep answers to one or two sentences.
+  systemPrompt: |
+    You are a cost warden. You flag wasteful workloads and idle capacity.
 
-    '
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "sre/cost-guardrails"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -167,10 +228,25 @@ spec:
   modelConfig:
     name: claude-model-config
   description: A drift sentinel running as a substrate actor
-  systemPrompt: 'You are a drift sentinel. You spot config drift between clusters.
-    Keep answers to one or two sentences.
+  systemPrompt: |
+    You are a drift sentinel. You spot config drift between clusters.
 
-    '
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "sre/change-safety"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -185,10 +261,25 @@ spec:
   modelConfig:
     name: claude-model-config
   description: A chaos probe running as a substrate actor
-  systemPrompt: 'You are a chaos probe. You propose safe failure experiments. Keep
-    answers to one or two sentences.
+  systemPrompt: |
+    You are a chaos probe. You propose safe failure experiments.
 
-    '
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "sre/change-safety"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -203,10 +294,27 @@ spec:
   modelConfig:
     name: claude-model-config
   description: An sre on-call assistant running as a substrate actor
-  systemPrompt: 'You are an SRE on-call assistant. You triage alerts calmly. Keep
-    answers to one or two sentences.
+  systemPrompt: |
+    You are an SRE on-call assistant. You triage alerts calmly.
 
-    '
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "sre/severity-rubric"}}
+
+    {{include "sre/change-safety"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -221,10 +329,25 @@ spec:
   modelConfig:
     name: claude-model-config
   description: A docs curator running as a substrate actor
-  systemPrompt: 'You are a docs curator. You keep runbooks accurate and short. Keep
-    answers to one or two sentences.
+  systemPrompt: |
+    You are a docs curator. You keep runbooks accurate and short.
 
-    '
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "sre/release-notes"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -239,7 +362,22 @@ spec:
   modelConfig:
     name: claude-model-config
   description: A patch smith running as a substrate actor
-  systemPrompt: 'You are a patch smith. You draft minimal, safe remediation patches.
-    Keep answers to one or two sentences.
+  systemPrompt: |
+    You are a patch smith. You draft minimal, safe remediation patches.
 
-    '
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "sre/change-safety"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts

@@ -55,6 +55,31 @@ limits the cost):
 node stimulate.mjs --budget 400 --load 0.5
 ```
 
+## Demo content for the kagent UI
+
+```bash
+node deploy/seed-demo.mjs            # once, with Scope running; --fresh to replace
+```
+
+This fills the pages of the kagent-enterprise UI that are empty on a new
+install:
+
+- **Chats:** 4 named conversations with real content: *Incident · EU
+  checkout 5xx* (sre-oncall), *Postmortem* (incident-scribe), *Capacity
+  review* (cost-warden), and *Release notes · 4.13* (release-notary).
+- **Snapshots:** 6 named checkpoints at important turns (for example "before
+  mitigation" and "after rollback").
+- **Forks:** *What-if · rollback blocked* is forked from the "before
+  mitigation" checkpoint. It is a second actor that starts from that saved
+  runtime and continues in a different direction.
+
+The **Prompts** page shows the libraries in `deploy/prompts.yaml`
+(`sre-playbooks`, `house-style`) and the `kagent-builtin-prompts` library of
+the chart. Each agent's instructions are made from fragments of these
+libraries with `{{include "alias/key"}}`. Thus a change to one fragment
+changes each agent that uses it. The change makes a new revision, so do it
+between demos.
+
 ## Two worker pools
 
 The fleet runs on two WorkerPools, which isolates one group of agents from

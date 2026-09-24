@@ -96,7 +96,7 @@ helm upgrade --install --kube-context "$C" kagent \
   --version 1.0.0-alpha3 --namespace kagent -f values.yaml "${LIC[@]}" --wait --timeout 15m
 
 # §10 two WorkerPools, two Harnesses, the fleet; then wait for 9 golden snapshots
-K apply -f fleet.yaml >/dev/null
+K apply -f prompts.yaml -f fleet.yaml >/dev/null   # prompt libraries before the agents that include them
 echo "waiting for golden snapshots..."
 for _ in $(seq 1 60); do
   ready=$(K get agenttemplate -n kagent -l demo=substrate-scope -o json \
@@ -106,3 +106,5 @@ done
 echo
 echo "Done. Start the board:"
 echo "  KUBE_CONTEXT=$C node server.mjs --live     # http://localhost:8123 (kagent UI on :8001)"
+echo "Then, once, fill the kagent UI's chats and Snapshots page:"
+echo "  node deploy/seed-demo.mjs"

@@ -9,7 +9,8 @@
     "live": "node server.mjs --live",
     "stimulate": "node stimulate.mjs",
     "install-lab": "./deploy/install.sh",
-    "preflight": "./deploy/preflight.sh"
+    "preflight": "./deploy/preflight.sh",
+    "seed": "node deploy/seed-demo.mjs"
   },
   "engines": {
     "node": ">=18"
