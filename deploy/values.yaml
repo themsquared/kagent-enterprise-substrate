@@ -16,6 +16,13 @@ telemetry:
     enabled: true
 
 otel:
+  # Not in #191 (its §2.5 says this has no effect; on alpha3 it does). With it
+  # on, the Tracing page's Input/Output panels show each turn's prompt and
+  # reply (gen_ai.input/output.messages on invoke_agent), and Claude's logs
+  # carry prompts, replies and tool arguments instead of <REDACTED>.
+  # PRIVACY: real conversation content lands in ClickHouse. Right for a demo
+  # lab; decide deliberately before doing this with customer data.
+  captureSensitiveContent: true
   tracing:
     enabled: true
     exporter:

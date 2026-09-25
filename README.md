@@ -294,6 +294,16 @@ worker pod), but you see the recovery on stage.
   turn as a new conversation (`SCOPE_TURNS_PER_SESSION`, default 1), and every
   Scope turn has a full trace. In the kagent UI, click **New chat** for each
   turn that you want to show in Tracing.
+- **Input and Output are empty by default.** Claude Code writes
+  `<REDACTED>` in place of prompts and replies, and the spans carry only
+  metadata (model, tokens, tool names). #191 §2.5 says that
+  `otel.captureSensitiveContent` has no effect. On alpha3 the setting has an
+  effect: with the setting on, the `invoke_agent` span has the prompt and the
+  reply (the Tracing Input and Output panels), and the logs have the tool
+  arguments. `deploy/values.yaml` sets it on for this lab. The setting stores
+  real conversation content in ClickHouse, so decide before you use it with
+  customer data. The tool spans do not carry arguments even with the setting
+  on. The arguments are only in the logs.
 - **Claude's `call_llm` spans can stop.** If they stop, Tracing shows each
   turn with "—" for Model and Tokens, and a trace has only `POST` and
   `invoke_agent`. On this rig the spans stopped for about 18 hours. They
