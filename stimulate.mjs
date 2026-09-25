@@ -13,9 +13,12 @@ const arg = (name, dflt) => {
   const i = process.argv.indexOf(`--${name}`);
   return i > -1 ? Number(process.argv[i + 1]) : dflt;
 };
+import { TOOL_PROMPTS } from './lib/prompts.mjs';
+
 const VIZ = process.env.VIZ || 'http://127.0.0.1:8123';
 const INTERVAL = arg('interval', 2);   // mean seconds between dispatch checks
 const LOAD = arg('load', 0.75);        // fraction of long-form prompts
+const TOOL_SHARE = arg('tools', 0.5);  // fraction of prompts that call MCP tools
 // --concurrency N to pin; otherwise auto-sized to (live worker count +
 // oversub) so every bay stays lit AND a visible retry-queue forms.
 const CONC_ARG = arg('concurrency', 0);
@@ -30,12 +33,10 @@ const QUICK_PROMPTS = [
   'What would you check first during an incident? One sentence.',
   'Reply with a haiku about Kubernetes.',
   'One sentence: why do snapshots beat idle pods?',
-  // tool turns: the MCP servers (mcp/server.mjs) give traces execute_tool spans
-  'Use your tools: is this outage DNS? Answer in one sentence.',
-  'Use your tools: ask the oracle whether we should deploy on Friday.',
-  'Use your tools: brew an incident-size coffee and check the bean level.',
-  'Use your tools: roll 2d20 to pick the next chaos target, then generate an excuse for it.',
 ];
+// Tool turns name one of the agent's own MCP servers (lib/prompts.mjs); each
+// call adds execute_tool spans to the trace.
+let toolsOf = {};                      // agent -> its MCP server names (from /agents)
 // Long generations hold an actor on its worker for 10–20s — that's what makes
 // several bays glow at once instead of a single 2s flash.
 const LONG_PROMPTS = [
@@ -65,7 +66,10 @@ async function workerCount() {
 
 async function chat(agentRef) {
   const [ns, name] = agentRef.split('/');
-  const prompt = Math.random() < LOAD ? rand(LONG_PROMPTS) : rand(QUICK_PROMPTS);
+  // half the traffic calls a tool: tool turns trace as ~12 spans, plain ones ~4
+  const srv = rand(toolsOf[name] ?? []);
+  const prompt = srv && TOOL_PROMPTS[srv] && Math.random() < TOOL_SHARE ? rand(TOOL_PROMPTS[srv])
+               : Math.random() < LOAD ? rand(LONG_PROMPTS) : rand(QUICK_PROMPTS);
   inFlight++; sent++;
   try {
     // the server records prompt + reply in the activity feed and queues the
@@ -83,7 +87,8 @@ async function chat(agentRef) {
   } finally { inFlight--; }
 }
 
-const { agents } = await fleet().catch(() => ({ agents: [] }));
+const { agents, tools } = await fleet().catch(() => ({ agents: [] }));
+toolsOf = tools ?? {};
 if (!agents.length) { console.error(`no Ready agents at ${VIZ}/agents — is server.mjs --live running?`); process.exit(1); }
 let concurrency = CONC_ARG || (await workerCount()) + OVERSUB;
 console.log(`stimulating ${agents.length} agents via ${VIZ} — ≤${concurrency} in flight`

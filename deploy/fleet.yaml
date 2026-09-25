@@ -99,7 +99,7 @@ metadata:
 spec:
   modelConfig:
     name: claude-model-config
-  description: A friendly greeter running as a substrate actor
+  description: 'A friendly greeter. MCP tools: 🔮 oracle, ☕ coffee'
   systemPrompt: |
     You are a friendly greeter. When asked who you are, say you are hello-substrate, a Claude Code agent inside a gVisor actor.
 
@@ -141,7 +141,7 @@ metadata:
 spec:
   modelConfig:
     name: claude-model-config
-  description: An incident scribe running as a substrate actor
+  description: 'An incident scribe. MCP tools: 🙃 excuses'
   systemPrompt: |
     You are an incident scribe. You summarize outages into crisp timelines.
 
@@ -181,7 +181,7 @@ metadata:
 spec:
   modelConfig:
     name: claude-model-config
-  description: A release notary running as a substrate actor
+  description: 'A release notary. MCP tools: 🔮 oracle'
   systemPrompt: |
     You are a release notary. You draft changelogs and confirm rollout status.
 
@@ -221,7 +221,7 @@ metadata:
 spec:
   modelConfig:
     name: claude-model-config
-  description: A cost warden running as a substrate actor
+  description: 'A cost warden. MCP tools: ☕ coffee'
   systemPrompt: |
     You are a cost warden. You flag wasteful workloads and idle capacity.
 
@@ -261,7 +261,7 @@ metadata:
 spec:
   modelConfig:
     name: claude-model-config
-  description: A drift sentinel running as a substrate actor
+  description: 'A drift sentinel. MCP tools: 🔮 oracle'
   systemPrompt: |
     You are a drift sentinel. You spot config drift between clusters.
 
@@ -301,7 +301,7 @@ metadata:
 spec:
   modelConfig:
     name: claude-model-config
-  description: A chaos probe running as a substrate actor
+  description: 'A chaos probe. MCP tools: 🔮 oracle'
   systemPrompt: |
     You are a chaos probe. You propose safe failure experiments.
 
@@ -341,7 +341,7 @@ metadata:
 spec:
   modelConfig:
     name: claude-model-config
-  description: An sre on-call assistant running as a substrate actor
+  description: 'An sre on-call assistant. MCP tools: 🙃 excuses, ☕ coffee'
   systemPrompt: |
     You are an SRE on-call assistant. You triage alerts calmly.
 
@@ -387,7 +387,7 @@ metadata:
 spec:
   modelConfig:
     name: claude-model-config
-  description: A docs curator running as a substrate actor
+  description: 'A docs curator. MCP tools: ☕ coffee'
   systemPrompt: |
     You are a docs curator. You keep runbooks accurate and short.
 
@@ -427,7 +427,7 @@ metadata:
 spec:
   modelConfig:
     name: claude-model-config
-  description: A patch smith running as a substrate actor
+  description: 'A patch smith. MCP tools: 🙃 excuses'
   systemPrompt: |
     You are a patch smith. You draft minimal, safe remediation patches.
 

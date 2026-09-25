@@ -152,6 +152,10 @@
             text-transform:uppercase;padding:1px 4px;border-radius:3px;
             border:1px solid var(--pc, var(--line));color:var(--pc, var(--faint))}
   .chip .pb:empty{display:none}
+  /* the MCP servers an agent can call, as their icons (hover for the list) */
+  .chip .tl{position:absolute;top:6px;right:7px;font-size:10px;letter-spacing:1px;line-height:1}
+  .chip .tl:empty{display:none}
+  .chip.tooled .nm{padding-right:26px}
   #versions{text-transform:none;letter-spacing:.04em}
   .chip.pooled .meta{padding-right:46px}
   .pgroup .plabel b{color:var(--pc, var(--text));white-space:nowrap}
@@ -424,7 +428,7 @@
     shelfEl.appendChild(slot);
     const el = document.createElement('div');
     el.className = 'chip cold';
-    el.innerHTML = `<span class="pb"></span><div class="nm">${name}</div><div class="st">suspended</div>
+    el.innerHTML = `<span class="pb"></span><span class="tl"></span><div class="nm">${name}</div><div class="st">suspended</div>
                     <div class="bar"><i></i></div><div class="meta"></div>`;
     stage.appendChild(el);
     const a = actors[name] = { name, ns, el, state:'cold', slot, worker:null,
@@ -472,7 +476,8 @@
   function setState(a, state, meta){
     const was = a.state;
     a.state = state;
-    a.el.className = 'chip ' + state + (a.el.classList.contains('pooled') ? ' pooled' : '');
+    a.el.className = 'chip ' + state + (a.el.classList.contains('pooled') ? ' pooled' : '')
+                   + (a.el.classList.contains('tooled') ? ' tooled' : '');
     a.el.querySelector('.st').textContent =
       {cold:'suspended', queued:'queued', restoring:'restoring',
        running:'running', checkpointing:'checkpointing'}[state];
@@ -671,7 +676,9 @@
   // pool when there are several. Chips address bays through bayRect(), so the
   // grouping is purely visual.
   let poolReplicas = {};
-  let agentRoutes = {};            // agent -> { pool, harness, selector } (live)
+  let agentRoutes = {};            // agent -> { pool, harness, selector, tools } (live)
+  let toolServers = {};            // MCP server -> { icon, description, tools } (live)
+  const toolList = agent => (agentRoutes[agent]?.tools ?? []).map(n => ({ name: n, ...(toolServers[n] ?? { icon: '🔧', tools: [] }) }));
   const POOL_COLORS = ['', '#C3A6FF', '#7BD88F', '#F28FAD'];   // first pool keeps the neutral look
   const poolColor = pool => {
     const pools = [...new Set(Object.values(agentRoutes).map(r => r.pool).filter(Boolean))].sort();
@@ -687,6 +694,10 @@
       el.querySelector('.pb').textContent = marked ? shortPool(r.pool) : '';
       el.classList.toggle('pooled', marked);
       el.style.setProperty('--pc', r?.pool ? (poolColor(r.pool) || 'var(--muted)') : '');
+      const tl = toolList(templateOf(n));
+      el.querySelector('.tl').textContent = tl.map(t => t.icon).join('');
+      el.querySelector('.tl').title = tl.map(t => `${t.name}: ${t.tools.join(', ')}`).join('\n');
+      el.classList.toggle('tooled', tl.length > 0);
     }
   }
   function syncBaysLive(list){
@@ -950,6 +961,8 @@
     const rt = agentRoutes[templateOf(drawerAgent)];
     $('d-sub').textContent = `${a.ns}/${drawerAgent}`
       + (rt?.pool ? ` · label ${rt.selector || '(any)'} → harness ${rt.harness} → pool ${rt.pool}` : '')
+      + (toolList(templateOf(drawerAgent)).length ? ` · tools: ${toolList(templateOf(drawerAgent))
+          .map(t => `${t.icon} ${t.name} (${t.tools.join(', ') || '…'})`).join(' · ')}` : '')
       + (a.worker ? ` · on ${a.worker.pod ?? 'worker-' + a.worker.id}` : '')
       + ` · ${a.el.querySelector('.meta').textContent}`
       + ((a.fairWork || a.fairQueue)
@@ -1167,6 +1180,7 @@
           $('wctrl').style.display = many ? 'none' : '';   // each pool row has its own +/-
         }
         applySnapshot(ev); badgeChips(); refreshPoolLabels(); break;   // busy counts after assignments
+      case 'tool_servers': toolServers = ev.servers ?? {}; badgeChips(); break;
       case 'versions': {
         const bits = [ev.kagent && `kagent-enterprise ${ev.kagent}`, ev.substrate && `substrate ${ev.substrate}`,
                        ...(ev.harness ?? []).map(h => h.replace(':', ' ')), ev.kubernetes && `k8s ${ev.kubernetes}`];

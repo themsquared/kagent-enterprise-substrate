@@ -23,6 +23,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { enterprise } from './lib/enterprise.mjs';
 import { GrpcError } from './lib/grpcweb.mjs';
+import { TOOL_PROMPTS } from './lib/prompts.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), 'public');
 const PKG_VERSION = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'package.json'), 'utf8')).version;
@@ -119,7 +120,8 @@ const server = createServer(async (req, res) => {
     // what stimulate.mjs drives: Ready AgentTemplates, and the live pool size
     if (!LIVE || source !== 'enterprise') return json(res, { agents: [], workers: 0 });
     const list = await ent.agents().catch(() => []);
-    return json(res, { agents: list.map(a => `${a.ns}/${a.name}`), workers: (state.lastSnap?.workers ?? []).length });
+    return json(res, { agents: list.map(a => `${a.ns}/${a.name}`), workers: (state.lastSnap?.workers ?? []).length,
+                       tools: Object.fromEntries(list.map(a => [a.name, a.tools ?? []])) });
   }
   if (req.url === '/chat' && req.method === 'POST') {
     // the drawer's "talk to the agent": one real chat, which restores the
@@ -452,9 +454,12 @@ function chatWithAgent(ns, name, prompt, via) {
 async function surge() {
   if (!demoRun) return 0;
   const list = await ent.agents().catch(() => []);
-  for (const a of list)
-    chatWithAgent(a.ns, a.name,
-      'Explain in about 120 words what you would do first in a production incident.', 'surge');
+  for (const a of list) {
+    const srv = a.tools?.[Math.floor(Math.random() * a.tools.length)];
+    chatWithAgent(a.ns, a.name, srv && TOOL_PROMPTS[srv]
+      ? `${TOOL_PROMPTS[srv][0]} Then, in about 80 words, what would you do first in a production incident?`
+      : 'Explain in about 120 words what you would do first in a production incident.', 'surge');
+  }
   return list.length;
 }
 
@@ -492,7 +497,22 @@ async function fetchVersions() {
   if (JSON.stringify(v) !== JSON.stringify(versions)) { versions = v; send({ type: 'versions', ...v }); }
 }
 
+// ── MCP tool servers: what each agent can call, for chips and the drawer ─────
+let toolServers = null;
+async function fetchToolServers() {
+  const r = await kubectl(['get', 'remotemcpservers.kagent.dev', '-n', ATESPACE, '-o', 'json']);
+  if (!r) return;
+  const v = Object.fromEntries((r.items ?? []).map(x => {
+    const d = x.spec?.description ?? '';
+    const icon = [...d][0] && /\p{Extended_Pictographic}/u.test([...d][0]) ? [...d][0] : '🔧';
+    return [x.metadata.name, { icon, description: d.replace(/^\S+\s+/, ''),
+                               tools: (x.status?.discoveredTools ?? []).map(t => t.name) }];
+  }));
+  if (JSON.stringify(v) !== JSON.stringify(toolServers)) { toolServers = v; send({ type: 'tool_servers', servers: v }); }
+}
+
 function replayState(res) {
+  if (toolServers) res.write(`data: ${JSON.stringify({ type: 'tool_servers', servers: toolServers })}\n\n`);
   if (versions) res.write(`data: ${JSON.stringify({ type: 'versions', ...versions })}\n\n`);
   res.write(`data: ${JSON.stringify({ type: 'demo_state', run: demoRun })}\n\n`);
   if (activity.length)
@@ -608,6 +628,7 @@ server.listen(PORT, async () => {
   }
   setTimeout(() => { poll(); setInterval(poll, 1000); }, 2500);  // fast enough for short turns
   fetchVersions(); setInterval(fetchVersions, 60_000);
+  fetchToolServers(); setInterval(fetchToolServers, 30_000);
   setTimeout(() => { sampleMetrics(); setInterval(sampleMetrics, 3000); }, 5000);
   if (source === 'enterprise') {
     // clear sessions a previous Scope run left behind (a wedged one can refuse)

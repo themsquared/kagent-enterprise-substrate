@@ -117,8 +117,15 @@ reference must not have `apiGroup` (`kind: RemoteMCPServer`, `name` only).
 
 Validated: an agent in its gVisor sandbox calls the in-cluster servers through
 the Substrate network (the server logs show each call and its arguments). To
-make traffic with tool calls, use prompts that start with "Use your tools:".
-`stimulate.mjs` sends some of these prompts.
+make traffic with tool calls, name a tool in the prompt. A general prompt
+("use your tools") usually gets "I need more context", or a built-in tool of
+Claude Code. [`lib/prompts.mjs`](lib/prompts.mjs) has prompts for each server.
+SURGE and `stimulate.mjs` use them: `--tools 0.5` (the default) sends a tool
+prompt to half of the agents, and each prompt names a server of that agent.
+
+The tools of each agent are shown in three locations: its icons on the chip
+(🔮☕🙃; hover to see the tool list), the tool list in the drawer, and the
+agent's description in the kagent UI (*MCP tools: 🙃 excuses, ☕ coffee*).
 
 ## Two worker pools
 
@@ -277,6 +284,16 @@ worker pod), but you see the recovery on stage.
   actor stays `Resuming` for 90s (`RESUME_STUCK_MS`), and **RESET POOL** now
   restarts the worker Deployments. The affected sessions go to `Crashed`, and
   Scope stops using them.
+- **Only the first turn of a conversation is traced completely.** The span
+  exporter of the Claude harness does not continue after a snapshot restore.
+  The first turn of a conversation, which is restored from the golden
+  snapshot, sends all its Claude spans (model, tokens, tools). The subsequent
+  turns, which are restored from the conversation's own snapshot, send no
+  Claude spans. Measured: 6 of 6 first turns have the spans, and 1 of 32
+  subsequent turns has them. The logs are not affected. Thus Scope sends each
+  turn as a new conversation (`SCOPE_TURNS_PER_SESSION`, default 1), and every
+  Scope turn has a full trace. In the kagent UI, click **New chat** for each
+  turn that you want to show in Tracing.
 - **Claude's `call_llm` spans can stop.** If they stop, Tracing shows each
   turn with "—" for Model and Tokens, and a trace has only `POST` and
   `invoke_agent`. On this rig the spans stopped for about 18 hours. They
