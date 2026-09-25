@@ -55,6 +55,20 @@ limits the cost):
 node stimulate.mjs --budget 400 --load 0.5
 ```
 
+## One chip per session
+
+Click **VIEW: AGENTS** (or open http://localhost:8123/?group=session) to
+change to the session view. By default, each chip is an agent, and the
+conversations of the agent collapse into a count of snapshots. In the session
+view, each conversation (each AgentInstance, one actor) has its own chip,
+with the label `agent·<actor id suffix>`. Two chats with `sre-oncall` then show
+as two sessions that compete for the `kagent-oncall` pool. The drawer of a
+session shows the activity feed of its agent, and "talk to this agent" still
+addresses the agent. Crashed sessions are not shown. A turn that waits in the
+queue shows as an agent chip until a worker becomes free. The view is ported
+from themsquared/substrate-scope#2 (@nmnellis). That PR was made against the
+same kagent-enterprise 1.0.0-alpha3 and Substrate 0.2.0-beta5.
+
 ## Demo content for the kagent UI
 
 ```bash

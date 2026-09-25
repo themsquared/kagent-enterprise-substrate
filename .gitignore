@@ -3,3 +3,4 @@ node_modules/
 .DS_Store
 deploy/kubectl-ate
 __pycache__/
+scope.log

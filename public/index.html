@@ -286,6 +286,7 @@
               style="display:none">RESET POOL</button>
       <button class="surge" id="autoscale" title="scale the pool automatically on queue depth / idle capacity"
               style="display:none">AUTOSCALE: OFF</button>
+      <button class="surge" id="view" title="one chip per agent, or one chip per conversation (session)">VIEW: AGENTS</button>
       <button class="surge" id="demo" title="master switch: stops the stimulator and surge from sending billable chats"
               style="display:none">STOP DEMO</button>
     </div>
@@ -434,6 +435,16 @@
     reflowCold();          // a new slot can rewrap the shelf; re-pin everyone
     refreshStats();
     return a;
+  }
+
+  // remove one chip for good (session view's temporary queue chips)
+  function dropChip(n){
+    const a = actors[n];
+    if (!a) return;
+    if (a.qslot) a.qslot.remove();
+    a.slot.remove(); a.el.remove();
+    delete actors[n];
+    reflowCold(); refreshStats();
   }
 
   function removeActor(){
@@ -614,7 +625,8 @@
 
   // ── stats + log ────────────────────────────────────────
   function refreshStats(){
-    const n = Object.keys(actors).length;
+    // agents, not chips: session view has many chips per agent
+    const n = new Set(Object.keys(actors).map(k => actors[k].template ?? k)).size;
     $('s-actors').textContent = n;
     $('s-workers').textContent = workers.length;
     $('s-density').textContent = workers.length ? (n/workers.length).toFixed(1)+'×' : '—';
@@ -639,6 +651,22 @@
   // pods, real actor runtime states, real assignments. We diff assignments
   // against the last snapshot to animate restores and checkpoints.
   const liveAssign = new Map();   // actorId -> workerPod | null
+
+  // Chip granularity (from themsquared/substrate-scope#2, by @nmnellis).
+  // Default: one chip per agent (template); its sessions collapse into a
+  // snapshot count. ?group=session splits them: one chip per actor, i.e. per
+  // conversation (a kagent AgentInstance), labelled template·<id suffix>, so
+  // concurrent chats on one agent show up as separate sessions multiplexed
+  // onto the pool. Enterprise: the adapter's golden-<agent> placeholder (an
+  // agent with no session yet) stays an agent chip.
+  const SPLIT_SESSIONS = new URLSearchParams(location.search).get('group') === 'session';
+  function chipName(ae){
+    const tpl = ae.actorTemplateName, id = String(ae.actorId ?? '');
+    if (!tpl) return 'actor-' + id.slice(0, 8);
+    if (!SPLIT_SESSIONS || id.startsWith('golden-')) return tpl;
+    return `${tpl}·${id.replace(/-/g, '').slice(-6)}`;
+  }
+  const templateOf = n => actors[n]?.template ?? n;
   // bays arrive as [{pod, pool}], sorted by pool then pod; one labelled row per
   // pool when there are several. Chips address bays through bayRect(), so the
   // grouping is purely visual.
@@ -654,7 +682,7 @@
   function badgeChips(){
     const multi = new Set(Object.values(agentRoutes).map(r => r.pool)).size > 1;
     for (const n in actors){
-      const r = agentRoutes[n], el = actors[n].el;
+      const r = agentRoutes[templateOf(n)], el = actors[n].el;
       const marked = !!(multi && r?.pool && poolColor(r.pool));   // the first pool stays unmarked
       el.querySelector('.pb').textContent = marked ? shortPool(r.pool) : '';
       el.classList.toggle('pooled', marked);
@@ -742,24 +770,31 @@
     // and reliable, and names the template directly. The actors list grows
     // unbounded and returns partial under load — joining through it made
     // running sessions invisible whenever their entry flickered out.
-    const asgByName = new Map();   // template name -> {pod, status?}
+    const asgByName = new Map();   // chip name -> pod
     for (const w of wlist)
-      if (w.actorId && w.actorTemplate) asgByName.set(w.actorTemplate, w.workerPod);
+      if (w.actorId && w.actorTemplate)
+        asgByName.set(chipName({ actorId: w.actorId, actorTemplateName: w.actorTemplate }), w.workerPod);
 
     // One agent (template) can own MANY actor entries at once — its golden
     // actor plus one session actor per chat. The chip represents the agent:
     // hot if the workers list assigns it a pod; otherwise a stack of snapshots.
     const groups = new Map();
     for (const ae of s.actors ?? []){
-      const name = ae.actorTemplateName || 'actor-'+String(ae.actorId).slice(0,8);
+      // a CRASHED session can never run again (alpha3 wedge): not a session to show
+      if (SPLIT_SESSIONS && ae.status === 'Crashed') continue;
+      const name = chipName(ae);
       if (!groups.has(name)) groups.set(name, []);
       groups.get(name).push(ae);
     }
     // an assigned agent whose actor entries flickered out entirely still
     // deserves its bay visit
-    for (const w of wlist)
-      if (w.actorId && w.actorTemplate && !groups.has(w.actorTemplate))
-        groups.set(w.actorTemplate, []);
+    const tplByChip = new Map();
+    for (const w of wlist){
+      if (!w.actorId || !w.actorTemplate) continue;
+      const n = chipName({ actorId: w.actorId, actorTemplateName: w.actorTemplate });
+      tplByChip.set(n, w.actorTemplate);
+      if (!groups.has(n)) groups.set(n, []);
+    }
 
     function farewell(a, name){
       if (a.worker){
@@ -774,6 +809,7 @@
 
     for (const [name, entries] of groups){
       const a = ensureActor(name, entries[0]?.actorTemplateNamespace || 'kagent');
+      a.template = entries[0]?.actorTemplateName ?? tplByChip.get(name) ?? a.template ?? name;
       const pod = asgByName.get(name) ?? null;
       const hot = entries.find(ae => podByActorId[ae.actorId])
                ?? (pod ? { status: 'Running' } : null);
@@ -887,7 +923,7 @@
       log('run', `<b>session</b> kagent/${name} activated from the drawer`);
     } else {
       fetch('/chat', { method: 'POST',
-        body: JSON.stringify({ ns: actors[name]?.ns ?? 'kagent', agent: name, text }) })
+        body: JSON.stringify({ ns: actors[name]?.ns ?? 'kagent', agent: templateOf(name), text }) })
         .then(r => r.json())
         .then(j => { if (!j.ok) actPush(name, 'error', j.error ?? 'chat failed', undefined, 'you'); })
         .catch(() => actPush(name, 'error', 'chat request failed', undefined, 'you'));
@@ -911,7 +947,7 @@
     fp.hidden = !fk;
     if (fk){ fp.textContent = `${FLAGS[fk].icon} ${fk === 'noisy' ? 'noisy neighbor' : fk}`;
              fp.className = 'd-flag ' + fk; }
-    const rt = agentRoutes[drawerAgent];
+    const rt = agentRoutes[templateOf(drawerAgent)];
     $('d-sub').textContent = `${a.ns}/${drawerAgent}`
       + (rt?.pool ? ` · label ${rt.selector || '(any)'} → harness ${rt.harness} → pool ${rt.pool}` : '')
       + (a.worker ? ` · on ${a.worker.pod ?? 'worker-' + a.worker.id}` : '')
@@ -921,7 +957,11 @@
     const ob = $('d-obo-head');
     ob.hidden = !a.obo;
     if (a.obo) ob.textContent = `⇅ acting on behalf of ${a.obo}`;
-    const list = agentAct.get(drawerAgent) ?? [];
+    // a session chip also shows its agent's feed (prompts/replies are reported per agent)
+    const tplName = templateOf(drawerAgent);
+    const list = [...(agentAct.get(drawerAgent) ?? []),
+                  ...(tplName !== drawerAgent ? agentAct.get(tplName) ?? [] : [])]
+                 .sort((x, y) => x.t - y.t);
     const body = $('d-body');
     body.innerHTML = list.length ? '' :
       '<div class="d-empty">no activity yet — waiting for this agent\'s next session</div>';
@@ -1159,6 +1199,8 @@
       case 'queue': {   // live mode: agents whose requests are bouncing off a full pool
         const want = new Set((ev.waiting ?? []).map(w => w.name ?? w));
         const now = Date.now();
+        if (SPLIT_SESSIONS) for (const t of want)
+          if (!actors[t]){ ensureActor(t, 'kagent').ephemeral = true; actors[t].template = t; }
         for (const n in actors){
           const a = actors[n];
           if (want.has(n)){
@@ -1177,8 +1219,10 @@
             const rest = Math.max(1200, 2500 - (now - (a.queuedAt ?? 0)));
             setTimeout(() => {
               if (a.state === 'queued' && a.unqueuedAt &&
-                  Date.now() - a.unqueuedAt >= 1100)
-                setState(a, 'cold', 'snapshot ✓ · zst');
+                  Date.now() - a.unqueuedAt >= 1100){
+                if (a.ephemeral) dropChip(n);            // session view: its session takes over
+                else setState(a, 'cold', 'snapshot ✓ · zst');
+              }
             }, rest);
           }
         }
@@ -1289,6 +1333,13 @@
     setWorkers(target, delta > 0);
     log('info', `<b>scale</b> workerpool → ${target} replicas`);
   }
+  $('view').textContent = SPLIT_SESSIONS ? 'VIEW: SESSIONS' : 'VIEW: AGENTS';
+  $('view').classList.toggle('on', SPLIT_SESSIONS);
+  $('view').onclick = () => {
+    const q = new URLSearchParams(location.search);
+    SPLIT_SESSIONS ? q.delete('group') : q.set('group', 'session');
+    location.search = q.toString();
+  };
   $('w-up').onclick = () => scale(+1);
   $('w-dn').onclick = () => scale(-1);
   $('a-up').onclick = addAgent;
