@@ -18,7 +18,15 @@
   .app{display:flex;flex-direction:column;gap:12px;padding:14px;min-height:100vh}
 
   /* ── header ─────────────────────────────────────────── */
-  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  /* row 1: brand left, stats right; row 2: one toolbar strip */
+  header{display:flex;flex-direction:column;gap:10px}
+  .hrow{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 10px;
+           background:var(--panel);border:1px solid var(--line);border-radius:10px}
+  .toolbar .ctrls{flex-wrap:wrap}
+  .tgroup{display:inline-flex;gap:6px}
+  .tsep{width:1px;height:18px;background:var(--line);margin:0 2px}
+  .toolbar .stop{margin-left:auto;color:var(--warn);border-color:rgba(242,143,173,.35)}
   .brand{font-family:var(--disp);font-weight:700;font-size:19px;letter-spacing:.04em}
   .brand small{color:var(--faint);font-weight:500;margin-left:8px;letter-spacing:.12em;font-size:11px;text-transform:uppercase}
   /* versions sit on their own line under the title, so they never push the controls */
@@ -40,7 +48,7 @@
   .surge{width:auto;padding:0 12px;font-family:var(--disp);font-weight:600;font-size:11px;
          letter-spacing:.14em;height:34px;border-radius:8px}
 
-  .stats{display:flex;gap:10px;margin-left:auto;flex-wrap:wrap}
+  .stats{display:flex;gap:8px;flex-wrap:wrap}
   .stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;
         padding:6px 14px;text-align:right;min-width:96px}
   .stat b{display:block;font-family:var(--mono);font-size:19px;font-weight:500;
@@ -153,9 +161,9 @@
             border:1px solid var(--pc, var(--line));color:var(--pc, var(--faint))}
   .chip .pb:empty{display:none}
   /* the MCP servers an agent can call, as their icons (hover for the list) */
-  .chip .tl{position:absolute;top:6px;right:7px;font-size:10px;letter-spacing:1px;line-height:1}
+  .chip .tl{position:absolute;top:24px;right:7px;font-size:10px;letter-spacing:1px;line-height:1}
   .chip .tl:empty{display:none}
-  .chip.tooled .nm{padding-right:26px}
+  .chip.tooled .st{padding-right:28px}
   #versions{text-transform:none;letter-spacing:.04em}
   .chip.pooled .meta{padding-right:46px}
   .pgroup .plabel b{color:var(--pc, var(--text));white-space:nowrap}
@@ -276,30 +284,39 @@
 
 <div class="app">
   <header>
-    <div class="brand">SUBSTRATE SCOPE<small id="versions">kagent enterprise · live actor lifecycle</small></div>
-    <div class="mode" id="mode">SIMULATED</div>
-    <div class="ctrls" id="ctrls">
-      <div class="ctrl" id="wctrl"><span>workers</span>
-        <button id="w-dn" aria-label="fewer workers">−</button>
-        <button id="w-up" aria-label="more workers">+</button></div>
-      <div class="ctrl"><span>agents</span>
-        <button id="a-dn" aria-label="fewer agents">−</button>
-        <button id="a-up" aria-label="more agents">+</button></div>
-      <button class="surge" id="surge" title="invoke every idle agent at once">SURGE</button>
-      <button class="surge" id="reset" title="bounce worker pods to free wedged slots (snapshots survive)"
-              style="display:none">RESET POOL</button>
-      <button class="surge" id="autoscale" title="scale the pool automatically on queue depth / idle capacity"
-              style="display:none">AUTOSCALE: OFF</button>
-      <button class="surge" id="view" title="one chip per agent, or one chip per conversation (session)">VIEW: AGENTS</button>
-      <button class="surge" id="demo" title="master switch: stops the stimulator and surge from sending billable chats"
-              style="display:none">STOP DEMO</button>
+    <div class="hrow">
+      <div class="brand">SUBSTRATE SCOPE<small id="versions">kagent enterprise · live actor lifecycle</small></div>
+      <div class="stats">
+        <div class="stat"><b id="s-actors" class="coldv">0</b><span>agents</span></div>
+        <div class="stat"><b id="s-workers" class="hotv">0</b><span>workers</span></div>
+        <div class="stat"><b id="s-density">—</b><span>density</span></div>
+        <div class="stat"><b id="s-sessions" class="okv">0</b><span>sessions</span></div>
+        <div class="stat"><b id="s-cold">—</b><span>last restore</span></div>
+      </div>
     </div>
-    <div class="stats">
-      <div class="stat"><b id="s-actors" class="coldv">0</b><span>agents</span></div>
-      <div class="stat"><b id="s-workers" class="hotv">0</b><span>workers</span></div>
-      <div class="stat"><b id="s-density">—</b><span>density</span></div>
-      <div class="stat"><b id="s-sessions" class="okv">0</b><span>sessions</span></div>
-      <div class="stat"><b id="s-cold">—</b><span>last restore</span></div>
+    <div class="toolbar">
+      <div class="mode" id="mode">SIMULATED</div>
+      <div class="ctrls" id="ctrls">
+        <div class="ctrl" id="wctrl"><span>workers</span>
+          <button id="w-dn" aria-label="fewer workers">−</button>
+          <button id="w-up" aria-label="more workers">+</button></div>
+        <div class="ctrl"><span>agents</span>
+          <button id="a-dn" aria-label="fewer agents">−</button>
+          <button id="a-up" aria-label="more agents">+</button></div>
+        <span class="tgroup">
+          <button class="surge" id="surge" title="invoke every idle agent at once">SURGE</button>
+          <button class="surge" id="reset" title="free wedged workers: cancel open tasks, replace worker pods (snapshots survive)"
+                  style="display:none">RESET POOL</button>
+        </span>
+        <span class="tsep" aria-hidden="true"></span>
+        <span class="tgroup">
+          <button class="surge" id="autoscale" title="scale each pool automatically on its own demand"
+                  style="display:none">AUTOSCALE: OFF</button>
+          <button class="surge" id="view" title="one chip per agent, or one chip per conversation (session)">VIEW: AGENTS</button>
+        </span>
+      </div>
+      <button class="surge stop" id="demo" title="master switch: stops the stimulator and surge from sending billable chats"
+              style="display:none">STOP DEMO</button>
     </div>
   </header>
 
