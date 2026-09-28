@@ -416,7 +416,12 @@ function pump() {
     if (freeWorkers(pool) <= 0) { i++; continue; }
     const [job] = admitQ.splice(i, 1); changed = true;
     inFlight[pool] = (inFlight[pool] ?? 0) + 1;
-    ent.converse(job.ns, job.name, job.prompt).then(r => {
+    // the prompt is recorded when the turn gets its session, tagged with it
+    ent.converse(job.ns, job.name, job.prompt, { onStart: actor => {
+      if (job.logged) return;
+      job.logged = true;
+      recordActivity({ agent: job.name, actor, kind: 'prompt', text: job.prompt.slice(0, 400), via: job.via });
+    } }).then(r => {
       inFlight[pool]--;
       // never reached a worker (or its session vanished): back to the front,
       // a bounded number of times so a real permission error still surfaces
@@ -425,7 +430,7 @@ function pump() {
         return;
       }
       const ms = Date.now() - job.t0;
-      recordActivity({ agent: job.name, kind: r.ok ? 'reply' : 'error',
+      recordActivity({ agent: job.name, actor: r.actor, kind: r.ok ? 'reply' : 'error',
                        text: String(r.text).slice(0, 400), ms, via: job.via });
       job.resolve({ ...r, ms });
     }).catch(e => {
@@ -442,7 +447,6 @@ let demoRun = true;   // master switch for anything that costs LLM tokens
 // One real chat to one agent: restore → LLM turn → checkpoint. Used by surge,
 // the drawer's "talk to the agent" box, and stimulate.mjs via /converse.
 function chatWithAgent(ns, name, prompt, via) {
-  recordActivity({ agent: name, kind: 'prompt', text: prompt.slice(0, 400), via });
   return new Promise(resolve => {
     admitQ.push({ ns, name, prompt, via, t0: Date.now(), resolve });
     broadcastQueue();

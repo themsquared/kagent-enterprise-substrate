@@ -915,6 +915,10 @@
   // ── per-agent activity + drawer ────────────────────────
   const agentAct = new Map();     // name -> [{t, kind, text, ms}]
   let drawerAgent = null;
+  // Where an activity entry belongs: in session view, the session (actor) that
+  // ran the turn; otherwise, and for entries with no session, the agent.
+  const actKey = e => (SPLIT_SESSIONS && e.actor)
+    ? chipName({ actorId: e.actor, actorTemplateName: e.agent }) : e.agent;
   function actPush(name, kind, text, ms, via, obo){
     if (!agentAct.has(name)) agentAct.set(name, []);
     const list = agentAct.get(name);
@@ -987,11 +991,8 @@
     const ob = $('d-obo-head');
     ob.hidden = !a.obo;
     if (a.obo) ob.textContent = `⇅ acting on behalf of ${a.obo}`;
-    // a session chip also shows its agent's feed (prompts/replies are reported per agent)
-    const tplName = templateOf(drawerAgent);
-    const list = [...(agentAct.get(drawerAgent) ?? []),
-                  ...(tplName !== drawerAgent ? agentAct.get(tplName) ?? [] : [])]
-                 .sort((x, y) => x.t - y.t);
+    // each chip's own feed: in session view, only that conversation's turns
+    const list = [...(agentAct.get(drawerAgent) ?? [])].sort((x, y) => x.t - y.t);
     const body = $('d-body');
     body.innerHTML = list.length ? '' :
       '<div class="d-empty">no activity yet — waiting for this agent\'s next session</div>';
@@ -1204,11 +1205,12 @@
         $('versions').textContent = bits.filter(Boolean).join(' · ');
         $('versions').title = `Substrate Scope ${ev.scope ?? ''} · versions read from the cluster`;
         break; }
-      case 'activity': actPush(ev.e.agent, ev.e.kind, ev.e.text, ev.e.ms, ev.e.via, ev.e.obo); break;
+      case 'activity': actPush(actKey(ev.e), ev.e.kind, ev.e.text, ev.e.ms, ev.e.via, ev.e.obo); break;
       case 'activity_history':
         for (const e of ev.items ?? []){
-          if (!agentAct.has(e.agent)) agentAct.set(e.agent, []);
-          agentAct.get(e.agent).push(e);
+          const k = actKey(e);
+          if (!agentAct.has(k)) agentAct.set(k, []);
+          agentAct.get(k).push(e);
           if (e.obo && actors[e.agent]) actors[e.agent].obo = e.obo;
         }
         if (drawerAgent) renderDrawer();
