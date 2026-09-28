@@ -939,8 +939,10 @@
       if (j.name) a.sessionName = j.name;
       if (j.creator) a.sessionCreator = j.creator;
       const list = agentAct.get(name) ?? [];
-      const seen = new Set(list.map(e => e.kind + '|' + e.text));
-      for (const e of j.items ?? []) if (!seen.has(e.kind + '|' + e.text)) list.push(e);
+      // the same turn seen live and in history differs in text (the live error
+      // carries the harness suffix), so match on kind within a few seconds
+      const dup = e => list.some(x => x.kind === e.kind && Math.abs((x.t ?? 0) - e.t) < 8000);
+      for (const e of j.items ?? []) if (!dup(e)) list.push(e);
       list.sort((x, y) => x.t - y.t);
       agentAct.set(name, list);
       if (drawerAgent === name) renderDrawer();
@@ -974,7 +976,8 @@
       log('run', `<b>session</b> kagent/${name} activated from the drawer`);
     } else {
       fetch('/chat', { method: 'POST',
-        body: JSON.stringify({ ns: actors[name]?.ns ?? 'kagent', agent: templateOf(name), text }) })
+        body: JSON.stringify({ ns: actors[name]?.ns ?? 'kagent', agent: templateOf(name), text,
+                               actor: SPLIT_SESSIONS ? actors[name]?.actorId : undefined }) })
         .then(r => r.json())
         .then(j => { if (!j.ok) actPush(name, 'error', j.error ?? 'chat failed', undefined, 'you'); })
         .catch(() => actPush(name, 'error', 'chat request failed', undefined, 'you'));
@@ -1252,10 +1255,17 @@
         log('info', `<b>demo</b> ${ev.run ? 'running — chats dispatching' : 'STOPPED — no billable chats'}`);
         break; }
       case 'queue': {   // live mode: agents whose requests are bouncing off a full pool
-        const want = new Set((ev.waiting ?? []).map(w => w.name ?? w));
+        const want = new Set((ev.waiting ?? []).map(w =>
+          (SPLIT_SESSIONS && w.actor) ? chipName({ actorId: w.actor, actorTemplateName: w.name }) : (w.name ?? w)));
         const now = Date.now();
-        if (SPLIT_SESSIONS) for (const t of want)
-          if (!actors[t]){ ensureActor(t, 'kagent').ephemeral = true; actors[t].template = t; }
+        if (SPLIT_SESSIONS){
+          for (const w of ev.waiting ?? [])
+            if (!w.actor && !actors[w.name]){ ensureActor(w.name, 'kagent').ephemeral = true; actors[w.name].template = w.name; }
+          // a temporary queue chip leaves the moment its turn is admitted (its
+          // session chip takes over); no linger, so repeated updates can't pin it
+          for (const n of Object.keys(actors))
+            if (actors[n].ephemeral && !want.has(n)) dropChip(n);
+        }
         for (const n in actors){
           const a = actors[n];
           if (want.has(n)){

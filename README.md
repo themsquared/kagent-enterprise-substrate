@@ -62,7 +62,11 @@ change to the session view. By default, each chip is an agent, and the
 conversations of the agent collapse into a count of snapshots. In the session
 view, each conversation (each AgentInstance, one actor) has its own chip,
 with the label `agent·<actor id suffix>`. Two chats with `sre-oncall` then show
-as two sessions that compete for the `kagent-oncall` pool. "Talk to this agent" still addresses the agent. The drawer of a session shows only the turns of that
+as two sessions that compete for the `kagent-oncall` pool. In the session view, the drawer's chat box **continues that session**: the
+turn runs in that conversation, and that chip restores, runs, and checkpoints.
+(A continued turn is a restore from the session's own snapshot. Thus in alpha3
+its trace has no Claude spans. Refer to Known issues.) In the agent view, the
+chat box starts a new session. The drawer of a session shows only the turns of that
 conversation, with the session's name (for example *Incident · EU checkout
 5xx*). Scope tags each prompt and reply with the actor that ran it. For a
 session that Scope did not see live (a seeded chat, a kagent UI chat, an

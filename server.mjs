@@ -136,7 +136,8 @@ const server = createServer(async (req, res) => {
     if (!LIVE || source !== 'enterprise') return json(res, { ok: false, error: 'chat needs --live with the enterprise source' });
     if (!demoRun) return json(res, { ok: false, error: 'demo is stopped (STOP DEMO)' });
     if (!b?.agent || !b?.text) { res.writeHead(400); return res.end('{"ok":false}'); }
-    chatWithAgent(b.ns || ATESPACE, b.agent, String(b.text).slice(0, 1000), 'you');
+    const actor = /^ai-[0-9a-f-]{8,}$/.test(b.actor ?? '') ? b.actor : undefined;   // continue this session
+    chatWithAgent(b.ns || ATESPACE, b.agent, String(b.text).slice(0, 1000), 'you', actor);
     return json(res, { ok: true });
   }
   if (req.url === '/converse' && req.method === 'POST') {
@@ -402,9 +403,14 @@ const admitQ = [];          // { ns, name, prompt, via, t0, resolve }
 const inFlight = {};        // pool -> Scope turns dispatched and not yet finished
 let extWaiting = [];        // names reported by external load generators
 function broadcastQueue() {
-  const names = [...new Set([...admitQ.map(j => j.name), ...extWaiting])];
+  // a turn aimed at one session carries it, so the session view can mark it
+  const seen = new Set(), waiting = [];
+  for (const w of [...admitQ.map(j => ({ name: j.name, actor: j.actor })), ...extWaiting.map(name => ({ name }))]) {
+    const k = w.name + '|' + (w.actor ?? '');
+    if (!seen.has(k)) { seen.add(k); waiting.push(w); }
+  }
   queuedNow = admitQ.length + extWaiting.length;
-  send({ type: 'queue', waiting: names.map(name => ({ name })) });
+  send({ type: 'queue', waiting });
 }
 // an agent's pool, from the Harness it runs on (first pool if unknown)
 const poolOf = name => state.lastSnap?.agentPools?.[name] ?? Object.keys(state.pools)[0];
@@ -423,7 +429,7 @@ function pump() {
     const [job] = admitQ.splice(i, 1); changed = true;
     inFlight[pool] = (inFlight[pool] ?? 0) + 1;
     // the prompt is recorded when the turn gets its session, tagged with it
-    ent.converse(job.ns, job.name, job.prompt, { onStart: actor => {
+    ent.converse(job.ns, job.name, job.prompt, { actor: job.actor, onStart: actor => {
       if (job.logged) return;
       job.logged = true;
       recordActivity({ agent: job.name, actor, kind: 'prompt', text: job.prompt.slice(0, 400), via: job.via });
@@ -452,9 +458,9 @@ let demoRun = true;   // master switch for anything that costs LLM tokens
 
 // One real chat to one agent: restore → LLM turn → checkpoint. Used by surge,
 // the drawer's "talk to the agent" box, and stimulate.mjs via /converse.
-function chatWithAgent(ns, name, prompt, via) {
+function chatWithAgent(ns, name, prompt, via, actor) {
   return new Promise(resolve => {
-    admitQ.push({ ns, name, prompt, via, t0: Date.now(), resolve });
+    admitQ.push({ ns, name, prompt, via, actor, t0: Date.now(), resolve });
     broadcastQueue();
     pump();
   });
