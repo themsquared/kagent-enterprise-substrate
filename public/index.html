@@ -838,6 +838,7 @@
     for (const [name, entries] of groups){
       const a = ensureActor(name, entries[0]?.actorTemplateNamespace || 'kagent');
       a.template = entries[0]?.actorTemplateName ?? tplByChip.get(name) ?? a.template ?? name;
+      if (SPLIT_SESSIONS && !a.actorId && String(entries[0]?.actorId ?? '').startsWith('ai-')) a.actorId = entries[0].actorId;
       const pod = asgByName.get(name) ?? null;
       const hot = entries.find(ae => podByActorId[ae.actorId])
                ?? (pod ? { status: 'Running' } : null);
@@ -928,8 +929,26 @@
     if (list.length > 80) list.shift();
     if (drawerAgent === name) renderDrawer();
   }
+  // Session view: a session Scope didn't see live (a seeded chat, a kagent UI
+  // chat, an earlier run) has its conversation read back from kagent, once.
+  function loadSessionHistory(name){
+    const a = actors[name];
+    if (!SPLIT_SESSIONS || !a?.actorId || a.historyLoaded) return;
+    a.historyLoaded = true;
+    fetch('/session-history?actor=' + encodeURIComponent(a.actorId)).then(r => r.json()).then(j => {
+      if (j.name) a.sessionName = j.name;
+      if (j.creator) a.sessionCreator = j.creator;
+      const list = agentAct.get(name) ?? [];
+      const seen = new Set(list.map(e => e.kind + '|' + e.text));
+      for (const e of j.items ?? []) if (!seen.has(e.kind + '|' + e.text)) list.push(e);
+      list.sort((x, y) => x.t - y.t);
+      agentAct.set(name, list);
+      if (drawerAgent === name) renderDrawer();
+    }).catch(() => { a.historyLoaded = false; });
+  }
   function openDrawer(name){
     drawerAgent = name;
+    loadSessionHistory(name);
     for (const n in actors) actors[n].el.classList.toggle('selected', n === name);
     $('drawer').classList.add('open');
     renderDrawer();
@@ -980,7 +999,8 @@
     if (fk){ fp.textContent = `${FLAGS[fk].icon} ${fk === 'noisy' ? 'noisy neighbor' : fk}`;
              fp.className = 'd-flag ' + fk; }
     const rt = agentRoutes[templateOf(drawerAgent)];
-    $('d-sub').textContent = `${a.ns}/${drawerAgent}`
+    $('d-sub').textContent = (a.sessionName ? `session "${a.sessionName}" · ` : '')
+      + (a.sessionCreator ? `by ${a.sessionCreator} · ` : '') + `${a.ns}/${drawerAgent}`
       + (rt?.pool ? ` · label ${rt.selector || '(any)'} → harness ${rt.harness} → pool ${rt.pool}` : '')
       + (toolList(templateOf(drawerAgent)).length ? ` · tools: ${toolList(templateOf(drawerAgent))
           .map(t => `${t.icon} ${t.name} (${t.tools.join(', ') || '…'})`).join(' · ')}` : '')
@@ -995,7 +1015,9 @@
     const list = [...(agentAct.get(drawerAgent) ?? [])].sort((x, y) => x.t - y.t);
     const body = $('d-body');
     body.innerHTML = list.length ? '' :
-      '<div class="d-empty">no activity yet — waiting for this agent\'s next session</div>';
+      `<div class="d-empty">${SPLIT_SESSIONS && a.actorId && !a.historyLoaded ? 'loading this session…'
+        : SPLIT_SESSIONS && a.actorId ? 'no turns in this session yet'
+        : 'no activity yet — waiting for this agent\'s next session'}</div>`;
     for (const e of [...list].reverse()){
       const d = document.createElement('div');
       d.className = 'd-entry k-' + e.kind;

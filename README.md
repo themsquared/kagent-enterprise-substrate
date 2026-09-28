@@ -63,7 +63,12 @@ conversations of the agent collapse into a count of snapshots. In the session
 view, each conversation (each AgentInstance, one actor) has its own chip,
 with the label `agent·<actor id suffix>`. Two chats with `sre-oncall` then show
 as two sessions that compete for the `kagent-oncall` pool. "Talk to this agent" still addresses the agent. The drawer of a session shows only the turns of that
-conversation: Scope tags each prompt and reply with the actor that ran it.
+conversation, with the session's name (for example *Incident · EU checkout
+5xx*). Scope tags each prompt and reply with the actor that ran it. For a
+session that Scope did not see live (a seeded chat, a kagent UI chat, an
+earlier run), the drawer reads the conversation back from kagent the first
+time it opens. Scope keeps its own sessions as suspended snapshots after their
+turn (`SCOPE_KEEP_SESSIONS`, default 3 per agent), so they stay on the board.
 Crashed sessions are not shown. A turn that waits in the
 queue shows as an agent chip until a worker becomes free. The view is ported
 from themsquared/substrate-scope#2 (@nmnellis). That PR was made against the

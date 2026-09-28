@@ -123,6 +123,12 @@ const server = createServer(async (req, res) => {
     return json(res, { agents: list.map(a => `${a.ns}/${a.name}`), workers: (state.lastSnap?.workers ?? []).length,
                        tools: Object.fromEntries(list.map(a => [a.name, a.tools ?? []])) });
   }
+  if (req.url.startsWith('/session-history?')) {
+    // one session's conversation, from kagent (for sessions Scope didn't see live)
+    const actor = new URLSearchParams(req.url.split('?')[1]).get('actor') ?? '';
+    if (!LIVE || source !== 'enterprise' || !/^ai-[0-9a-f-]{8,}$/.test(actor)) return json(res, { items: [] });
+    return json(res, await ent.sessionHistory(actor).catch(e => ({ items: [], error: String(e.message).slice(0, 160) })) ?? { items: [] });
+  }
   if (req.url === '/chat' && req.method === 'POST') {
     // the drawer's "talk to the agent": one real chat, which restores the
     // actor — activation you can watch happen on the board. Fire-and-forget.
