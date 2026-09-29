@@ -1013,7 +1013,7 @@
          ? ` · ${a.fairWork ?? 0}s on workers / ${a.fairQueue ?? 0}s queued` : '');
     const ob = $('d-obo-head');
     ob.hidden = !a.obo;
-    if (a.obo) ob.textContent = `⇅ acting on behalf of ${a.obo}`;
+    if (a.obo) ob.textContent = `⇅ user: ${a.obo}`;
     // each chip's own feed: in session view, only that conversation's turns
     const list = [...(agentAct.get(drawerAgent) ?? [])].sort((x, y) => x.t - y.t);
     const body = $('d-body');
@@ -1032,7 +1032,7 @@
       d.querySelector('.d-text').textContent = e.text ?? '';
       if (e.obo){
         const o = document.createElement('div'); o.className = 'd-obo';
-        o.textContent = `⇅ on behalf of ${e.obo}`;
+        o.textContent = `⇅ user: ${e.obo}`;
         d.appendChild(o);
       }
       body.appendChild(d);
@@ -1230,7 +1230,11 @@
         $('versions').textContent = bits.filter(Boolean).join(' · ');
         $('versions').title = `Substrate Scope ${ev.scope ?? ''} · versions read from the cluster`;
         break; }
-      case 'activity': actPush(actKey(ev.e), ev.e.kind, ev.e.text, ev.e.ms, ev.e.via, ev.e.obo); break;
+      case 'activity':
+        actPush(actKey(ev.e), ev.e.kind, ev.e.text, ev.e.ms, ev.e.via, ev.e.obo);
+        if (ev.e.via === 'telegram' && ev.e.kind === 'prompt')
+          log('run', `<b>📱 telegram</b> → ${String(ev.e.agent ?? '').replace(/[^\w.-]/g, '')}: a message woke it`);
+        break;
       case 'activity_history':
         for (const e of ev.items ?? []){
           const k = actKey(e);

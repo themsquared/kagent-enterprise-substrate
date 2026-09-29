@@ -3,7 +3,7 @@
 A lab and a live demo for **kagent-enterprise** on **Agent Substrate**:
 
 - `deploy/`: one script makes a kind cluster, installs Substrate and
-  kagent-enterprise, and makes 9 Claude Code agents on two worker pools.
+  kagent-enterprise, and makes 18 Claude Code agents on two worker pools.
 - **Substrate Scope** (`server.mjs`): a live board that shows these agents as
   snapshot-backed actors in gVisor sandboxes, not as always-on pods. The
   board shows restores, queueing, autoscaling, isolation, and the CPU and
@@ -16,9 +16,9 @@ new, because kagent-enterprise is a different API.
 
 | Version pin | |
 | --- | --- |
-| kagent-enterprise | `1.0.0-alpha3` |
-| Agent Substrate | `0.2.0-beta5` |
-| Harness image | `claude-harness:1.0.0-alpha2` (by digest) |
+| kagent-enterprise | `1.0.0-alpha4` |
+| Agent Substrate | enterprise `0.2.0-beta5-4dc39f7` |
+| Harness image | `claude-harness:1.0.0-alpha3` (by digest) |
 | Kubernetes | 1.37, with `certificates.k8s.io/v1beta1` on |
 
 ![Substrate Scope on kagent-enterprise: two worker pools, agents running, and the CPU saved](docs/scope-enterprise.png)
@@ -35,11 +35,12 @@ cd kagent-enterprise-substrate
 ```
 
 This takes about 10 minutes. The script makes the kind cluster `kagent-ent`,
-installs Substrate and kagent-enterprise, and makes 9 agents on two
-WorkerPools (refer to [Two worker pools](#two-worker-pools)). Set
-`SOLO_LICENSE_KEY` to license the install; without it, the controller logs a
-license warning and continues to operate. Set `ANTHROPIC_KEY_FILE` if the key
-is not in `~/.anthropic_key`.
+installs Substrate and kagent-enterprise, and makes 18 agents on two
+WorkerPools (refer to [Two worker pools](#two-worker-pools)). `SOLO_LICENSE_KEY`
+is required: enterprise Substrate's router and egress run agentgateway-enterprise,
+and its chart will not install without a key (an agentgateway key works). With an
+agentgateway key, the kagent controller logs a license warning and continues to
+operate. Set `ANTHROPIC_KEY_FILE` if the key is not in `~/.anthropic_key`.
 
 ```bash
 KUBE_CONTEXT=kind-kagent-ent node server.mjs --live
@@ -112,9 +113,9 @@ token count of the turn.
 
 | Server | Tools | Bound to |
 | --- | --- | --- |
-| `oracle` 🔮 | `ask_the_oracle` (a Magic 8-Ball for ops), `roll_dice` | chaos-probe, release-notary, drift-sentinel, hello-substrate |
-| `coffee` ☕ | `brew`, `bean_level` (on-call morale index) | sre-oncall, cost-warden, doc-curator, hello-substrate |
-| `excuses` 🙃 | `generate_excuse`, `blame_dns` (it is always DNS) | sre-oncall, incident-scribe, patch-smith |
+| `oracle` 🔮 | `ask_the_oracle` (a Magic 8-Ball for ops), `roll_dice` | chaos-probe, release-notary, drift-sentinel, hello-substrate, cert-watcher, flag-flipper, log-lens, rollback-ranger |
+| `coffee` ☕ | `brew`, `bean_level` (on-call morale index) | sre-oncall, cost-warden, doc-curator, hello-substrate, quota-keeper, runbook-reader, log-lens, pager-triage |
+| `excuses` 🙃 | `generate_excuse`, `blame_dns` (it is always DNS) | sre-oncall, incident-scribe, patch-smith, dep-scout, pr-reviewer, pager-triage, rollback-ranger |
 
 The three servers are one file, [`mcp/server.mjs`](mcp/server.mjs). The
 file uses the Streamable HTTP transport with JSON responses and has no
@@ -135,6 +136,61 @@ prompt to half of the agents, and each prompt names a server of that agent.
 The tools of each agent are shown in three locations: its icons on the chip
 (🔮☕🙃; hover to see the tool list), the tool list in the drawer, and the
 agent's description in the kagent UI (*MCP tools: 🙃 excuses, ☕ coffee*).
+
+## Wake an agent from Telegram
+
+sre-oncall has its own Telegram bot. A message to the bot wakes the agent from
+its snapshot. The agent answers on Telegram and then suspends again. No pod
+waits for the message.
+
+```
+phone → Telegram → Cloudflare Tunnel → telegram-doorbell ──A2A──▶ sre-oncall (restored)
+sre-oncall ──MCP, egress adds the bot token──▶ telegram-mcp → Telegram → phone
+```
+
+- **The agent owns the bot, and never sees the token.** kagent v1 does not
+  put secrets in a sandbox (a Harness `env` `credentialRef` fails
+  validation). The token is in Secret `telegram-bot`, bound on the `telegram`
+  RemoteMCPServer through `headersFrom`. Substrate's egress gateway adds it as
+  a header on each call the agent makes to `telegram-mcp`. The sandbox holds
+  only kagent's inert placeholder. A caller without the binding gets
+  "no bot credential".
+- **The doorbell** (`telegram/doorbell.mjs`) is the only part that is always
+  on (about 10Mi). It has no bot token and no model key, and it never replies
+  itself. It refuses a delivery that does not carry the webhook secret, it
+  ignores chats that are not on `TELEGRAM_ALLOWED_CHATS` (and logs their
+  chat id), and it forwards the rest to one session per chat
+  (`telegram-sre-oncall-<chat>`). So the agent remembers the conversation
+  between messages. `/new` starts a fresh session.
+- **The tools** (`telegram/mcp.mjs`): `send_typing`, `send_message`,
+  `set_webhook`, `get_webhook_info`. `send_message` also enforces the
+  allowlist. The agent registers its own webhook.
+
+Setup (once):
+
+1. Make a bot with @BotFather (`/newbot`) and save its token to
+   `~/.telegram_bot_token`.
+2. Make a Cloudflare Tunnel (Zero Trust → Networks → Tunnels, type
+   Cloudflared) and save its token to `~/.cloudflared_tunnel_token`. Give it a
+   public hostname on your domain that routes to
+   `http://telegram-doorbell.kagent.svc.cluster.local:8080`.
+3. Load them, and have the agent register its webhook (one real turn):
+   ```bash
+   TELEGRAM_PUBLIC_URL=https://<your-hostname> ./deploy/telegram-up.sh
+   ./deploy/telegram-up.sh --register
+   ```
+4. Message the bot once. The doorbell ignores the message and logs your
+   chat id. Allow it:
+   ```bash
+   kubectl --context kind-kagent-ent logs -n kagent deploy/telegram-doorbell | grep ignored
+   TELEGRAM_ALLOWED_CHATS=<chat-id> ./deploy/telegram-up.sh
+   ```
+
+The script reads the token files and never prints them. Without a bot token,
+the Secret holds a placeholder, so sre-oncall stays Ready and only the
+Telegram tools fail. On the board, a Telegram turn shows as
+`📱 telegram → sre-oncall` in the event feed and as `via telegram` in the
+drawer. The drawer shows the sender's name, not the chat id.
 
 ## Two worker pools
 
@@ -212,8 +268,9 @@ Claude turn. Thus the CPU line uses the cumulative `usageCoreNanoSeconds`
 counter, not the instantaneous rate. The counter includes all the CPU time of
 a turn, also when the turn completes between two refreshes.
 
-The figures for the 9-agent fleet, measured at idle on this rig:
-**2.3× less reserved, 11× less memory in use**. When the fleet is full
+The figures for the 18-agent fleet (13 general, 5 on-call) on 4 workers,
+measured at idle on this rig: **4.5× less reserved, about 55× less memory in
+use**. (The 9-agent fleet measured 2.3× and 11×.) When the fleet is full
 (each agent has a worker), the reserved figure is the same as always-on, but
 the used figure stays much lower. The autoscaler never gives a pool more
 workers than it has agents. The reserved ratio is agents ÷ idle workers. Thus
@@ -249,7 +306,7 @@ python3 tools/gen-schema.py \
 ## The demo beats
 
 1. **The pods do not show the agents.** Do `kubectl get pods -n kagent`: you
-   see 4 worker pods, 2 in each pool. The board shows 9 agents, and all of
+   see 4 worker pods, 2 in each pool. The board shows 18 agents, and all of
    them are snapshots in storage.
 2. **Watch one agent operate.** Click a chip. The drawer shows the prompt, the
    restore onto a worker, the reply and its latency, and the checkpoint. Type
@@ -257,12 +314,13 @@ python3 tools/gen-schema.py \
 3. **The kagent UI is on the same board.** Chat with an agent at :8001. The
    prompt and the reply show in the Scope drawer, with the identity of the
    user (`obo`).
-4. **Overload it.** Click SURGE: 6 turns go to the 2 `kagent-default` workers
-   and 3 turns go to the 2 `kagent-oncall` workers. The queue fills, and
-   AUTOSCALE adds workers to each pool to agree with the demand of that pool.
-   When the demand stops, the pools decrease again.
-5. **Isolation.** While SURGE fills `kagent-default`, talk to `sre-oncall`. It
-   goes directly to its own pool, and the backlog does not delay it.
+4. **Overload it.** Click SURGE: 13 turns go to the 2 `kagent-default`
+   workers. The on-call pool is left out (`SURGE_POOLS`). The queue fills, and
+   AUTOSCALE adds workers to that pool to agree with its demand, up to
+   `SCOPE_MAX_WORKERS`. When the demand stops, the pool decreases again.
+5. **Isolation.** While SURGE fills `kagent-default`, page `sre-oncall`, from
+   the drawer or from Telegram. It goes directly to its own pool, and the
+   backlog does not delay it.
 6. **The platform view.** Open the kagent UI home page. It shows the same
    run as cold-start rate, activation p95, and occupancy for each pool.
 7. **The cost chart.** Telemetry → CPU: the dotted line is what 9 always-on
@@ -285,6 +343,13 @@ worker pod), but you see the recovery on stage.
 
 ## Known issues (alpha3, found while building this)
 
+- **alpha4: worker pods stay in `Init` on enterprise Substrate.** The
+  enterprise chart's default `workerCredentialMode: ate-ca-compat` adds an
+  `ate-ca-agent` init container that mounts `ate-ca-server-ca` and two trust
+  ConfigMaps. Nothing in this install creates them. On k8s 1.37, set
+  `workerCredentialMode: podcertificates` (it is in
+  `deploy/substrate-values.yaml`). The pod-certificate controller from §6
+  serves it.
 - **A resume can stop in `Resuming`.** If a controller restart (for example a
   `helm upgrade`) occurs during a resume, the actor stays `Resuming` and keeps
   its worker. The golden snapshots for the new revision then wait for a free
@@ -360,11 +425,12 @@ worker pod), but you see the recovery on stage.
 | Env | Default | |
 | --- | --- | --- |
 | `KUBE_CONTEXT` | current context | Scope sends all kubectl calls and port-forwards to this context only |
-| `SCOPE_MAX_WORKERS` | `8` | Maximum number of workers for each pool, for the autoscaler and the +/- buttons |
+| `SCOPE_MAX_WORKERS` | `6` | Maximum number of workers for each pool, for the autoscaler and the +/- buttons |
 | `KAGENT_TOKEN` | autoauth | Bearer token for an OIDC cluster |
 | `KAGENT_API` / `KAGENT_UI` | port-forwards | Controller :8083 and UI :8080 addresses, if you give them |
 | `ATESPACE` | `kagent` | Atespace to monitor |
 | `UNIT_CPU_M` / `UNIT_MEM_MI` | ActorTemplate limits, or 50m/128Mi | Resources reserved for each always-on agent pod, for the cost chart |
+| `SURGE_POOLS` | on-call excluded | SURGE fires at every agent except the on-call pool, so a page to sre-oncall (Telegram) during the burst finds an idle worker. `all` includes it |
 
 HTTP endpoints: `GET /events` (SSE), `GET /agents`, `POST /converse {agent,
 text}` (one turn; the response comes when the turn completes), `POST /chat`,

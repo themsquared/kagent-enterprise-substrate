@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Substrate Scope — Enterprise edition. A live visualizer for Agent Substrate
-// under kagent-enterprise (1.0.0-alpha3 + Substrate 0.2.0-beta5).
+// under kagent-enterprise (1.0.0-alpha4 + enterprise Substrate 0.2.0-beta5-4dc39f7).
 // Zero dependencies; needs node >= 18 and kubectl on the PATH.
 //
 //   node server.mjs                        # simulated feed (built into the page)
@@ -300,8 +300,9 @@ const asState = {};     // pool -> { lastScaleAt, upStreak, downStreak, demandWi
 const asFor = name => (asState[name] ??= { lastScaleAt: 0, upStreak: 0, downStreak: 0, demandWin: [] });
 // SCOPE_MAX_WORKERS caps scale-up: each gVisor worker restoring Claude Code
 // costs real CPU, and a laptop Docker VM shared with other clusters starves
-// (probes time out, ate-api-server restarts) well before 8.
-const AS = { MIN: 2, MAX: Number(process.env.SCOPE_MAX_WORKERS) || 8, COOL_UP: 8_000, COOL_DOWN: 20_000,
+// (probes time out, ate-api-server restarts) well before 8. 6 per pool: with
+// 13 general agents a SURGE would otherwise ask for 8 + 5 gVisor workers.
+const AS = { MIN: 2, MAX: Number(process.env.SCOPE_MAX_WORKERS) || 6, COOL_UP: 8_000, COOL_DOWN: 20_000,
              UP_TICKS: 2, DOWN_TICKS: 6, WINDOW: 10 };
 
 function scaleTo(pool, n, why) {
@@ -467,9 +468,13 @@ function chatWithAgent(ns, name, prompt, via, actor) {
 }
 
 // ── surge: a burst of real chats across every Ready agent ────────────────────
+// ...except the on-call pool, so a page to sre-oncall (Telegram) during the
+// burst lands on an idle worker: that is the isolation the demo shows.
+// SURGE_POOLS=all fires at every pool.
 async function surge() {
   if (!demoRun) return 0;
-  const list = await ent.agents().catch(() => []);
+  const skip = process.env.SURGE_POOLS === 'all' ? [] : ['kagent-oncall'];
+  const list = (await ent.agents().catch(() => [])).filter(a => !skip.includes(a.pool));
   for (const a of list) {
     const srv = a.tools?.[Math.floor(Math.random() * a.tools.length)];
     chatWithAgent(a.ns, a.name, srv && TOOL_PROMPTS[srv]

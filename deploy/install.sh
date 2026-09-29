@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# One-shot lab: kind (k8s 1.37) + Agent Substrate 0.2.0-beta5 +
-# kagent-enterprise 1.0.0-alpha3 + the 9-agent Claude Code fleet.
+# One-shot lab: kind (k8s 1.37) + enterprise Agent Substrate 0.2.0-beta5-4dc39f7 +
+# kagent-enterprise 1.0.0-alpha4 + the 18-agent Claude Code fleet.
 # Follows solo-io/enterprise-kagent discussion #191, sections 4-10.
 #
 #   ANTHROPIC_KEY_FILE=~/.anthropic_key SOLO_LICENSE_KEY=... ./deploy/install.sh
 #
-# SOLO_LICENSE_KEY is optional: without it the controller logs
-# "[SOLO LICENSE] ... missing or invalid" and still runs. Re-run with a
-# kagent-enterprise license to license it (an agentgateway key is rejected).
+# SOLO_LICENSE_KEY is required: enterprise Substrate's router and egress run
+# agentgateway-enterprise, and its chart will not render without a key (an
+# agentgateway key is the right one there). kagent gets the same key: with an
+# agentgateway key its controller logs "[SOLO LICENSE] ... missing or invalid"
+# and still runs. Use a kagent-enterprise license to license kagent too.
 # Idempotent enough to re-run after a failure; skips steps already done.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -16,6 +18,7 @@ C=kind-$CLUSTER
 K() { kubectl --context "$C" "$@"; }
 KEYFILE=${ANTHROPIC_KEY_FILE:-$HOME/.anthropic_key}
 [ -s "$KEYFILE" ] || { echo "Anthropic key file $KEYFILE missing (set ANTHROPIC_KEY_FILE)"; exit 1; }
+[ -n "${SOLO_LICENSE_KEY:-}" ] || { echo "SOLO_LICENSE_KEY is required (enterprise Substrate needs it)"; exit 1; }
 kind version | grep -qE 'v0\.(3[2-9]|[4-9][0-9])' || { echo "kind >= v0.32 required (brew upgrade kind)"; exit 1; }
 
 # §4 cluster: 1.37 with certificates.k8s.io/v1beta1 on (Substrate needs it)
@@ -26,13 +29,17 @@ K get --raw /apis/certificates.k8s.io/v1beta1 | jq -e '.resources[] | select(.na
 helm status --kube-context "$C" kagent-crds -n kagent >/dev/null 2>&1 || \
 helm install --kube-context "$C" kagent-crds \
   oci://us-docker.pkg.dev/solo-public/kagent-enterprise-helm/charts/kagent-enterprise-crds \
-  --version 1.0.0-alpha3 --namespace kagent --create-namespace --set substrate.enabled=true
+  --version 1.0.0-alpha4 --namespace kagent --create-namespace --set substrate.enabled=true
 
 # §6.1 Substrate as its own release: name "substrate", namespace ate-system.
 # upgrade --install so a re-run applies value changes (otel.endpoint, which
-# feeds the kagent dashboard, is not in the #191 procedure).
-helm upgrade --install --kube-context "$C" substrate oci://ghcr.io/kagent-dev/substrate/helm/substrate \
-  --version 0.2.0-beta5 --namespace ate-system --create-namespace --wait=false -f substrate-values.yaml
+# feeds the kagent dashboard, is not in the #191 procedure). alpha4 pairs with
+# the enterprise Substrate build (the one its bundled subchart pins), not the
+# ghcr.io/kagent-dev OSS chart that #191 installs for alpha3.
+helm upgrade --install --kube-context "$C" substrate \
+  oci://us-docker.pkg.dev/solo-public/enterprise-substrate-helm/substrate \
+  --version 0.2.0-beta5-4dc39f7 --namespace ate-system --create-namespace --wait=false \
+  -f substrate-values.yaml --set-string licensing.licenseKey="$SOLO_LICENSE_KEY"
 
 # §6.2 pools (once only: make-* fails if the Secret exists)
 ATE=./kubectl-ate
@@ -88,30 +95,32 @@ K rollout restart deploy/k8s-credential-provider deploy/atenet-egress -n ate-sys
 K rollout status deploy/atenet-egress -n ate-system --timeout=120s
 
 # §7 kagent-enterprise
-LIC=(--set global.licensing.createSecret=false)
-[ -n "${SOLO_LICENSE_KEY:-}" ] && LIC=(--set global.licensing.createSecret=true
-                                       --set-string global.licensing.licenseKey="$SOLO_LICENSE_KEY")
+LIC=(--set global.licensing.createSecret=true --set-string global.licensing.licenseKey="$SOLO_LICENSE_KEY")
 helm upgrade --install --kube-context "$C" kagent \
   oci://us-docker.pkg.dev/solo-public/kagent-enterprise-helm/charts/kagent-enterprise \
-  --version 1.0.0-alpha3 --namespace kagent -f values.yaml "${LIC[@]}" --wait --timeout 15m
+  --version 1.0.0-alpha4 --namespace kagent -f values.yaml "${LIC[@]}" --wait --timeout 15m
 
 # The useless MCP servers the agents bind to (mcp/server.mjs on node:22-alpine)
 K create configmap scope-mcp-src -n kagent --from-file=../mcp/server.mjs --dry-run=client -o yaml | K apply -f - >/dev/null
 K apply -f mcp.yaml >/dev/null
 for s in oracle coffee excuses; do K rollout status deploy/scope-mcp-$s -n kagent --timeout=180s >/dev/null; done
+# sre-oncall's Telegram bot (deploy/telegram.yaml). Its template binds the
+# telegram server, so this goes in before the fleet; with no bot token yet the
+# Secret is a placeholder and the Telegram parts stay idle.
+KUBE_CONTEXT="$C" ./telegram-up.sh >/dev/null
 for _ in $(seq 1 30); do   # kagent discovers each server's tools (first try can race the pod)
   n=$(K get remotemcpservers.kagent.dev -n kagent -l demo=substrate-scope -o json \
     | jq '[.items[] | select(any(.status.conditions[]?; .type=="Accepted" and .status=="True"))] | length')
-  [ "$n" = 3 ] && break; sleep 5
+  [ "$n" = 4 ] && break; sleep 5
 done
 
-# §10 two WorkerPools, two Harnesses, the fleet; then wait for 9 golden snapshots
+# §10 two WorkerPools, two Harnesses, the fleet; then wait for 18 golden snapshots
 K apply -f prompts.yaml -f fleet.yaml >/dev/null   # prompt libraries and tools before the agents that use them
 echo "waiting for golden snapshots..."
 for _ in $(seq 1 60); do
   ready=$(K get agenttemplate -n kagent -l demo=substrate-scope -o json \
     | jq '[.items[] | select(any(.status.harnesses[]?.conditions[]?; .type=="Ready" and .status=="True"))] | length')
-  echo "  $ready/9 Ready"; [ "$ready" = 9 ] && break; sleep 10
+  echo "  $ready/18 Ready"; [ "$ready" = 18 ] && break; sleep 10
 done
 echo
 echo "Done. Start the board:"

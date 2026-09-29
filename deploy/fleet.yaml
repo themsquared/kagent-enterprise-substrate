@@ -1,7 +1,9 @@
-# Enterprise fleet: the 9 OSS SandboxAgents re-expressed for kagent-enterprise
-# 1.0.0-alpha3. Enterprise has no SandboxAgent kind; an agent is an AgentTemplate
-# admitted by a Harness. All 9 run on the Claude Code harness (the validated
-# runtime in this release) against claude-haiku-4-5, same model as the OSS rig.
+# Enterprise fleet for kagent-enterprise 1.0.0-alpha4: 18 agents on 4 workers.
+# The first 9 are the OSS SandboxAgents re-expressed (enterprise has no
+# SandboxAgent kind; an agent is an AgentTemplate admitted by a Harness); the 9
+# from quota-keeper on double the fleet so the density shows. All 18 run on the
+# Claude Code harness (the validated runtime in this release) against
+# claude-haiku-4-5, same model as the OSS rig.
 #
 # Two worker pools, for isolation: the incident agents (label
 # scope.demo/pool=oncall) run on kagent-oncall through Harness claude-oncall;
@@ -31,14 +33,14 @@ metadata:
   name: claude
   namespace: kagent
   annotations:
-    scope.demo/image-tag: claude-harness:1.0.0-alpha2
+    scope.demo/image-tag: claude-harness:1.0.0-alpha3
 spec:
   claude: {}
   env:
   - name: OTEL_RESOURCE_ATTRIBUTES
     value: kagent.harness.kind=claude
   workload:
-    image: ghcr.io/kagent-dev/kagent/claude-harness@sha256:6794f2d25be053766030dcd15aa0da58747a425bcf423e851ad0b6870d79d1b5
+    image: ghcr.io/kagent-dev/kagent/claude-harness@sha256:eaa786736cdb82f3bc6f8928afc6057218c2bb70c5c93eb231c64715d251ac22
   substrate:
     workerPoolRef:
       name: kagent-default
@@ -60,7 +62,7 @@ metadata:
 spec:
   replicas: 2
   sandboxClass: gvisor
-  workerImage: ghcr.io/kagent-dev/substrate/ateom-gvisor:v0.2.0-beta5
+  workerImage: us-docker.pkg.dev/solo-public/substrate-enterprise/ateom-gvisor:v0.2.0-beta5-4dc39f7
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: Harness
@@ -68,7 +70,7 @@ metadata:
   name: claude-oncall
   namespace: kagent
   annotations:
-    scope.demo/image-tag: claude-harness:1.0.0-alpha2
+    scope.demo/image-tag: claude-harness:1.0.0-alpha3
 spec:
   allowedAgentTemplates:
     selector:
@@ -85,7 +87,7 @@ spec:
     workerPoolRef:
       name: kagent-oncall
   workload:
-    image: ghcr.io/kagent-dev/kagent/claude-harness@sha256:6794f2d25be053766030dcd15aa0da58747a425bcf423e851ad0b6870d79d1b5
+    image: ghcr.io/kagent-dev/kagent/claude-harness@sha256:eaa786736cdb82f3bc6f8928afc6057218c2bb70c5c93eb231c64715d251ac22
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -341,7 +343,7 @@ metadata:
 spec:
   modelConfig:
     name: claude-model-config
-  description: 'An sre on-call assistant. MCP tools: 🙃 excuses, ☕ coffee'
+  description: 'An sre on-call assistant, reachable on Telegram. MCP tools: 🙃 excuses, ☕ coffee, 📱 telegram'
   systemPrompt: |
     You are an SRE on-call assistant. You triage alerts calmly.
 
@@ -357,6 +359,8 @@ spec:
 
     {{include "sre/change-safety"}}
 
+    {{include "channel/telegram"}}
+
     {{include "kagent-builtin-prompts/safety-guardrails"}}
   promptTemplate:
     dataSources:
@@ -364,6 +368,8 @@ spec:
       alias: style
     - name: sre-playbooks
       alias: sre
+    - name: telegram-channel
+      alias: channel
     - name: kagent-builtin-prompts
   tools:
   - mcp:
@@ -374,6 +380,12 @@ spec:
       server:
         kind: RemoteMCPServer
         name: coffee
+  # its own Telegram bot: the token is bound on the RemoteMCPServer
+  # (headersFrom) and added by egress per call, never in the sandbox
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: telegram
 ---
 apiVersion: kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -450,6 +462,378 @@ spec:
       alias: sre
     - name: kagent-builtin-prompts
   tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: excuses
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: quota-keeper
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: general
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: 'A quota keeper. MCP tools: ☕ coffee'
+  systemPrompt: |
+    You watch namespace quotas and requests, and say who is reserving capacity they do not use.
+
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "style/tools"}}
+
+    {{include "sre/cost-guardrails"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: coffee
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: cert-watcher
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: general
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: 'A certificate watcher. MCP tools: 🔮 oracle'
+  systemPrompt: |
+    You track TLS certificate expiry and rotation, and flag anything that expires within 30 days.
+
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "style/tools"}}
+
+    {{include "sre/change-safety"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: oracle
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: dep-scout
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: general
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: 'A dependency scout. MCP tools: 🙃 excuses'
+  systemPrompt: |
+    You review dependency and base-image upgrades, and say which ones are safe to merge today.
+
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "style/tools"}}
+
+    {{include "sre/change-safety"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: excuses
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: flag-flipper
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: general
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: 'A feature-flag operator. MCP tools: 🔮 oracle'
+  systemPrompt: |
+    You manage feature-flag rollouts: who sees a flag, how to widen it, and how to turn it off fast.
+
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "style/tools"}}
+
+    {{include "sre/change-safety"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: oracle
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: runbook-reader
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: general
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: 'A runbook reader. MCP tools: ☕ coffee'
+  systemPrompt: |
+    You answer operational questions from the team runbooks and say which runbook step applies.
+
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "style/tools"}}
+
+    {{include "sre/severity-rubric"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: coffee
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: pr-reviewer
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: general
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: 'A pull-request reviewer. MCP tools: 🙃 excuses'
+  systemPrompt: |
+    You review infrastructure pull requests for blast radius, rollback path, and missing tests.
+
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "style/tools"}}
+
+    {{include "sre/change-safety"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: excuses
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: log-lens
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: general
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: 'A log analyst. MCP tools: 🔮 oracle, ☕ coffee'
+  systemPrompt: |
+    You triage log excerpts: find the first error, the component that raised it, and how often it repeats.
+
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "style/tools"}}
+
+    {{include "sre/severity-rubric"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: oracle
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: coffee
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: pager-triage
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: oncall
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: 'A page triager. MCP tools: 🙃 excuses, ☕ coffee'
+  systemPrompt: |
+    You triage incoming pages: classify severity, find the owning team, and say whether to wake someone up.
+
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "style/tools"}}
+
+    {{include "sre/severity-rubric"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: excuses
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: coffee
+---
+apiVersion: kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: rollback-ranger
+  namespace: kagent
+  labels:
+    kagent.dev/runtime: claude
+    demo: substrate-scope
+    scope.demo/pool: oncall
+spec:
+  modelConfig:
+    name: claude-model-config
+  description: 'A rollback ranger. MCP tools: 🔮 oracle, 🙃 excuses'
+  systemPrompt: |
+    You plan and verify rollbacks during incidents: what to roll back, in what order, and how to prove it worked.
+
+    {{include "style/voice"}}
+
+    {{include "style/brevity"}}
+
+    {{include "style/identity"}}
+
+    {{include "style/tools"}}
+
+    {{include "sre/change-safety"}}
+
+    {{include "kagent-builtin-prompts/safety-guardrails"}}
+  promptTemplate:
+    dataSources:
+    - name: house-style
+      alias: style
+    - name: sre-playbooks
+      alias: sre
+    - name: kagent-builtin-prompts
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: oracle
   - mcp:
       server:
         kind: RemoteMCPServer

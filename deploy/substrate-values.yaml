@@ -8,3 +8,9 @@ credentialProvider:
 # activation, per-instance requests) stay empty. http:// is load-bearing.
 otel:
   endpoint: http://solo-enterprise-telemetry-collector.kagent.svc.cluster.local:4317
+# Enterprise chart only. Its default, ate-ca-compat, gives every worker pod an
+# ate-ca-agent init container that mounts ate-ca-server-ca and two trust
+# ConfigMaps, which nothing in this install creates: the workers sit in Init
+# forever. On k8s 1.37 (this lab) use pod certificates, which the
+# podcertificate-controller from §6 already serves.
+workerCredentialMode: podcertificates

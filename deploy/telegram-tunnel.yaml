@@ -1,0 +1,29 @@
+# Named Cloudflare Tunnel (free on a domain you have on Cloudflare). Its public
+# hostname routes to http://telegram-doorbell.kagent.svc.cluster.local:8080,
+# set in the Cloudflare dashboard. Its own file so that re-applying
+# telegram.yaml never touches it: telegram-up.sh applies this one only once
+# Secret cloudflared-tunnel exists.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telegram-tunnel
+  namespace: kagent
+  labels: {app: telegram-tunnel, demo: substrate-scope}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: telegram-tunnel}}
+  template:
+    metadata:
+      labels: {app: telegram-tunnel, demo: substrate-scope}
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2026.9.3@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c
+          args: [tunnel, --no-autoupdate, --metrics, "0.0.0.0:2000", run]
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom: {secretKeyRef: {name: cloudflared-tunnel, key: token}}
+          readinessProbe: {httpGet: {path: /ready, port: 2000}, periodSeconds: 10}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}

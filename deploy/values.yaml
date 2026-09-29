@@ -1,4 +1,4 @@
-# kagent-enterprise 1.0.0-alpha3 values for the Substrate Scope demo.
+# kagent-enterprise 1.0.0-alpha4 values for the Substrate Scope demo.
 # Follows solo-io/enterprise-kagent discussion #191 §7, with two deltas:
 #   - Anthropic is the default provider (no OpenAI key needed; Codex is not in
 #     this demo). default-model-config -> Secret kagent-anthropic.
@@ -55,7 +55,7 @@ substrateWorkerPool:
   create: true
   name: kagent-default
   replicas: 2
-  workerImage: ghcr.io/kagent-dev/substrate/ateom-gvisor:v0.2.0-beta5
+  workerImage: us-docker.pkg.dev/solo-public/substrate-enterprise/ateom-gvisor:v0.2.0-beta5-4dc39f7
   sandboxClass: gvisor
 
 providers:

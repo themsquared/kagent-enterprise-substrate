@@ -1,7 +1,7 @@
 {
   "name": "kagent-enterprise-substrate",
   "version": "0.2.0",
-  "description": "kagent-enterprise + Agent Substrate: a one-script lab (kind, two worker pools, nine Claude Code agents) and Substrate Scope, a live board for the actor lifecycle",
+  "description": "kagent-enterprise + Agent Substrate: a one-script lab (kind, two worker pools, 18 Claude Code agents) and Substrate Scope, a live board for the actor lifecycle",
   "type": "module",
   "main": "server.mjs",
   "scripts": {
